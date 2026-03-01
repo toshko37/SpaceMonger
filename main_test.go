@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -170,5 +173,86 @@ cgroup2 /sys/fs/cgroup cgroup2 rw 0 0
 	}
 	if len(mounts) != 0 {
 		t.Errorf("expected 0 real mounts, got %d", len(mounts))
+	}
+}
+
+func TestAuthHandler_wrongPassword(t *testing.T) {
+	settingsMu.Lock()
+	globalSettings = Settings{Auth: AuthSettings{Enabled: true, Password: "secret"}}
+	settingsMu.Unlock()
+
+	body := `{"password":"wrong"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/auth", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	authHandler(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d", w.Code)
+	}
+}
+
+func TestAuthHandler_correctPassword(t *testing.T) {
+	settingsMu.Lock()
+	globalSettings = Settings{Auth: AuthSettings{Enabled: true, Password: "secret"}}
+	settingsMu.Unlock()
+
+	body := `{"password":"secret"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/auth", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	authHandler(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	found := false
+	for _, c := range w.Result().Cookies() {
+		if c.Name == "sm_session" && c.Value != "" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected sm_session cookie in response")
+	}
+}
+
+func TestAuthMiddleware_allowsWhenDisabled(t *testing.T) {
+	settingsMu.Lock()
+	globalSettings = Settings{Auth: AuthSettings{Enabled: false}}
+	settingsMu.Unlock()
+
+	called := false
+	handler := authMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/data", nil)
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	if !called {
+		t.Error("expected handler to be called when auth disabled")
+	}
+}
+
+func TestAuthMiddleware_blocks401WhenEnabled(t *testing.T) {
+	settingsMu.Lock()
+	globalSettings = Settings{Auth: AuthSettings{Enabled: true, Password: "x"}}
+	settingsMu.Unlock()
+
+	handler := authMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/data", nil) // no cookie
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d", w.Code)
 	}
 }

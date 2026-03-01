@@ -228,6 +228,66 @@ func getMounts() ([]Mount, error) {
 	return parseMountsFile("/proc/mounts")
 }
 
+// ─── Auth / Sessions ──────────────────────────────────────────────────────────
+
+func isAuthenticated(r *http.Request) bool {
+	cfg := getSettings()
+	if !cfg.Auth.Enabled {
+		return true
+	}
+	cookie, err := r.Cookie("sm_session")
+	if err != nil {
+		return false
+	}
+	sessionMu.RLock()
+	defer sessionMu.RUnlock()
+	_, ok := sessions[cookie.Value]
+	return ok
+}
+
+func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !isAuthenticated(r) {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next(w, r)
+	}
+}
+
+func authHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	cfg := getSettings()
+	if req.Password != cfg.Auth.Password {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	token := genToken()
+	sessionMu.Lock()
+	sessions[token] = struct{}{}
+	sessionMu.Unlock()
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "sm_session",
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+}
+
 var (
 	sessions  = make(map[string]struct{})
 	sessionMu sync.RWMutex
