@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -254,5 +256,91 @@ func TestAuthMiddleware_blocks401WhenEnabled(t *testing.T) {
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401, got %d", w.Code)
+	}
+}
+
+// ─── Scan Handler Tests ───────────────────────────────────────────────────────
+
+// TestScanHandler_concurrentScan verifies that a second scan request while one
+// is in progress returns HTTP 409 Conflict, and that a lone scan completes with
+// status "done".
+func TestScanHandler_concurrentScan(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "test.txt"), []byte("data"), 0644)
+
+	// Simulate an in-progress scan by holding scanMu directly.
+	scanMu.Lock()
+	req409 := httptest.NewRequest(http.MethodGet, "/api/scan?path="+url.QueryEscape(dir), nil)
+	w409 := httptest.NewRecorder()
+	scanHandler(w409, req409)
+	scanMu.Unlock()
+
+	if w409.Code != http.StatusConflict {
+		t.Errorf("expected 409 Conflict for concurrent scan, got %d", w409.Code)
+	}
+
+	// A normal (non-concurrent) scan must complete with status "done".
+	req := httptest.NewRequest(http.MethodGet, "/api/scan?path="+url.QueryEscape(dir), nil)
+	w := httptest.NewRecorder()
+	scanHandler(w, req)
+
+	if !strings.Contains(w.Body.String(), `"status":"done"`) {
+		t.Errorf("expected status:done in SSE body, got: %s", w.Body.String())
+	}
+}
+
+// TestScanHandler_pathNormalization verifies that filepath.Clean is applied to
+// the path query parameter before scanning begins.
+func TestScanHandler_pathNormalization(t *testing.T) {
+	dir := t.TempDir()
+	subdir := filepath.Join(dir, "subdir")
+	os.Mkdir(subdir, 0755)
+
+	// Build a messy path that normalizes to subdir.
+	messyPath := dir + "//subdir/../subdir"
+	cleanedPath := filepath.Clean(messyPath)
+
+	q := url.Values{"path": {messyPath}}
+	req := httptest.NewRequest(http.MethodGet, "/api/scan?"+q.Encode(), nil)
+	w := httptest.NewRecorder()
+	scanHandler(w, req)
+
+	globalScanner.mu.RLock()
+	got := globalScanner.current
+	globalScanner.mu.RUnlock()
+
+	if got != cleanedPath {
+		t.Errorf("expected cleaned path %q, scanner current = %q", cleanedPath, got)
+	}
+}
+
+// TestScanHandler_errorFieldInDoneEvent verifies that scanning a non-existent
+// path yields a SSE done event with a non-empty "error" field.
+func TestScanHandler_errorFieldInDoneEvent(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/scan?path=/nonexistent/path/does/not/exist/xyz", nil)
+	w := httptest.NewRecorder()
+	scanHandler(w, req)
+
+	body := w.Body.String()
+	var lastData string
+	for _, line := range strings.Split(body, "\n") {
+		if strings.HasPrefix(line, "data: ") {
+			lastData = strings.TrimPrefix(line, "data: ")
+		}
+	}
+
+	var msg map[string]interface{}
+	if err := json.Unmarshal([]byte(lastData), &msg); err != nil {
+		t.Fatalf("failed to parse SSE done event JSON: %v\nbody:\n%s", err, body)
+	}
+	if msg["status"] != "done" {
+		t.Errorf("expected status=done in done event, got: %v", msg["status"])
+	}
+	errVal, ok := msg["error"]
+	if !ok {
+		t.Fatal("expected 'error' field in done event, not found")
+	}
+	if s, _ := errVal.(string); s == "" {
+		t.Errorf("expected non-empty error for non-existent path, got empty string")
 	}
 }
