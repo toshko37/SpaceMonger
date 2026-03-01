@@ -122,3 +122,53 @@ func TestScanner_nested(t *testing.T) {
 		t.Errorf("expected dirs >= 1, got %d", s.dirs)
 	}
 }
+
+func TestParseMounts_realFSOnly(t *testing.T) {
+	content := `sysfs /sys sysfs rw,nosuid 0 0
+proc /proc proc rw,nosuid 0 0
+/dev/sda1 / ext4 rw,relatime 0 0
+/dev/sda2 /home ext4 rw,relatime 0 0
+tmpfs /tmp tmpfs rw,nosuid 0 0
+/dev/sdb1 /data xfs rw,relatime 0 0
+`
+	f, _ := os.CreateTemp("", "mounts*")
+	f.WriteString(content)
+	f.Close()
+	defer os.Remove(f.Name())
+
+	mounts, err := parseMountsFile(f.Name())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(mounts) != 3 { // ext4 x2 + xfs x1, skip sysfs/proc/tmpfs
+		t.Errorf("expected 3 real mounts, got %d: %+v", len(mounts), mounts)
+	}
+	paths := map[string]bool{}
+	for _, m := range mounts {
+		paths[m.Path] = true
+	}
+	for _, want := range []string{"/", "/home", "/data"} {
+		if !paths[want] {
+			t.Errorf("missing mount path %s", want)
+		}
+	}
+}
+
+func TestParseMounts_filtersPseudo(t *testing.T) {
+	content := `devpts /dev/pts devpts rw 0 0
+tmpfs /run/user/1000 tmpfs rw 0 0
+cgroup2 /sys/fs/cgroup cgroup2 rw 0 0
+`
+	f, _ := os.CreateTemp("", "mounts*")
+	f.WriteString(content)
+	f.Close()
+	defer os.Remove(f.Name())
+
+	mounts, err := parseMountsFile(f.Name())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(mounts) != 0 {
+		t.Errorf("expected 0 real mounts, got %d", len(mounts))
+	}
+}

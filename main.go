@@ -169,13 +169,64 @@ func (s *Scanner) scanDir(path string) (*FileNode, error) {
 	return node, nil
 }
 
-// ─── Stubs for compile ────────────────────────────────────────────────────────
-// (will be replaced in subsequent tasks)
+// ─── Mounts ───────────────────────────────────────────────────────────────────
 
-type Mount struct{}
+type Mount struct {
+	Device string `json:"device"`
+	Path   string `json:"path"`
+	FSType string `json:"fstype"`
+	Total  int64  `json:"total"`
+	Free   int64  `json:"free"`
+}
 
-func getMounts() ([]Mount, error)             { return nil, nil }
-func parseMountsFile(string) ([]Mount, error) { return nil, nil }
+var realFSTypes = map[string]bool{
+	"ext4":     true,
+	"ext3":     true,
+	"ext2":     true,
+	"xfs":      true,
+	"btrfs":    true,
+	"zfs":      true,
+	"ntfs":     true,
+	"vfat":     true,
+	"fat32":    true,
+	"f2fs":     true,
+	"reiserfs": true,
+	"jfs":      true,
+	"fuseblk":  true,
+}
+
+func parseMountsFile(path string) ([]Mount, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	var mounts []Mount
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		fields := strings.Fields(sc.Text())
+		if len(fields) < 3 {
+			continue
+		}
+		device, mountPath, fstype := fields[0], fields[1], fields[2]
+		if !realFSTypes[fstype] {
+			continue
+		}
+		m := Mount{Device: device, Path: mountPath, FSType: fstype}
+		var stat syscall.Statfs_t
+		if err := syscall.Statfs(mountPath, &stat); err == nil {
+			m.Total = int64(stat.Blocks) * int64(stat.Bsize)
+			m.Free = int64(stat.Bavail) * int64(stat.Bsize)
+		}
+		mounts = append(mounts, m)
+	}
+	return mounts, sc.Err()
+}
+
+func getMounts() ([]Mount, error) {
+	return parseMountsFile("/proc/mounts")
+}
 
 var (
 	sessions  = make(map[string]struct{})
