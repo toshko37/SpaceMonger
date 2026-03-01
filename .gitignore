@@ -1,0 +1,7 @@
+settings.json
+spacemonger
+spacemonger-linux-amd64
+spacemonger-linux-arm64
+spacemonger-linux-arm
+*.exe
+.DS_Store
