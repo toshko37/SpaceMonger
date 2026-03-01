@@ -69,14 +69,110 @@ func genPassword() string {
 	return string(b)
 }
 
+// ─── File Tree ────────────────────────────────────────────────────────────────
+
+type FileNode struct {
+	Name     string      `json:"name"`
+	Size     int64       `json:"size"`
+	Mtime    time.Time   `json:"mtime"`
+	IsDir    bool        `json:"isDir"`
+	Children []*FileNode `json:"children,omitempty"`
+}
+
+// ─── Scanner ──────────────────────────────────────────────────────────────────
+
+type Scanner struct {
+	mu        sync.RWMutex
+	root      *FileNode
+	files     int64
+	dirs      int64
+	current   string
+	done      bool
+	scanErr   error
+	totalDisk int64
+	freeDisk  int64
+}
+
+var globalScanner = &Scanner{}
+
+func (s *Scanner) Scan(path string) {
+	s.mu.Lock()
+	s.root = nil
+	s.files = 0
+	s.dirs = 0
+	s.current = path
+	s.done = false
+	s.scanErr = nil
+	s.totalDisk = 0
+	s.freeDisk = 0
+	s.mu.Unlock()
+
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs(path, &stat); err == nil {
+		s.mu.Lock()
+		s.totalDisk = int64(stat.Blocks) * int64(stat.Bsize)
+		s.freeDisk = int64(stat.Bavail) * int64(stat.Bsize)
+		s.mu.Unlock()
+	}
+
+	root, err := s.scanDir(path)
+
+	s.mu.Lock()
+	s.root = root
+	s.done = true
+	s.scanErr = err
+	s.mu.Unlock()
+}
+
+func (s *Scanner) scanDir(path string) (*FileNode, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+
+	node := &FileNode{
+		Name:  filepath.Base(path),
+		Mtime: info.ModTime(),
+		IsDir: info.IsDir(),
+	}
+
+	if !info.IsDir() {
+		node.Size = info.Size()
+		s.mu.Lock()
+		s.files++
+		s.mu.Unlock()
+		return node, nil
+	}
+
+	s.mu.Lock()
+	s.dirs++
+	s.current = path
+	s.mu.Unlock()
+
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return node, nil // return empty dir on permission error — don't abort scan
+	}
+
+	for _, entry := range entries {
+		if entry.Type()&os.ModeSymlink != 0 {
+			continue // skip symlinks to avoid loops and cross-filesystem traversal
+		}
+		child, err := s.scanDir(filepath.Join(path, entry.Name()))
+		if err != nil {
+			continue
+		}
+		node.Children = append(node.Children, child)
+		node.Size += child.Size
+	}
+
+	return node, nil
+}
+
 // ─── Stubs for compile ────────────────────────────────────────────────────────
 // (will be replaced in subsequent tasks)
 
-type FileNode struct{}
-type Scanner struct{ mu sync.RWMutex }
 type Mount struct{}
-
-var globalScanner = &Scanner{}
 
 func getMounts() ([]Mount, error)             { return nil, nil }
 func parseMountsFile(string) ([]Mount, error) { return nil, nil }

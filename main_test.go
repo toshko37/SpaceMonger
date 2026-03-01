@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -55,5 +56,69 @@ func TestGenPassword_alphanumeric(t *testing.T) {
 				t.Errorf("non-alphanumeric char %c in password %s", c, p)
 			}
 		}
+	}
+}
+
+func TestScanner_singleFile(t *testing.T) {
+	dir := t.TempDir()
+	content := []byte("hello world") // 11 bytes
+	os.WriteFile(filepath.Join(dir, "test.txt"), content, 0644)
+
+	s := &Scanner{}
+	s.Scan(dir)
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.root == nil {
+		t.Fatal("expected root node, got nil")
+	}
+	if len(s.root.Children) != 1 {
+		t.Fatalf("expected 1 child, got %d", len(s.root.Children))
+	}
+	if s.root.Children[0].Size != 11 {
+		t.Errorf("expected size 11, got %d", s.root.Children[0].Size)
+	}
+	if s.files != 1 {
+		t.Errorf("expected files=1, got %d", s.files)
+	}
+}
+
+func TestScanner_dirSizeIsSum(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "a.txt"), make([]byte, 100), 0644)
+	os.WriteFile(filepath.Join(dir, "b.txt"), make([]byte, 200), 0644)
+
+	s := &Scanner{}
+	s.Scan(dir)
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.root.Size != 300 {
+		t.Errorf("expected total size 300, got %d", s.root.Size)
+	}
+	if s.files != 2 {
+		t.Errorf("expected files=2, got %d", s.files)
+	}
+}
+
+func TestScanner_nested(t *testing.T) {
+	dir := t.TempDir()
+	sub := filepath.Join(dir, "subdir")
+	os.Mkdir(sub, 0755)
+	os.WriteFile(filepath.Join(sub, "file.txt"), make([]byte, 500), 0644)
+
+	s := &Scanner{}
+	s.Scan(dir)
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.root.Size != 500 {
+		t.Errorf("expected total size 500, got %d", s.root.Size)
+	}
+	if s.dirs < 1 {
+		t.Errorf("expected dirs >= 1, got %d", s.dirs)
 	}
 }
