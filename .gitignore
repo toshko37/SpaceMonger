@@ -5,3 +5,6 @@ spacemonger-linux-arm64
 spacemonger-linux-arm
 *.exe
 .DS_Store
+*.test
+coverage.out
+Screenshot*.png
