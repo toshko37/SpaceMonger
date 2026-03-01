@@ -60,7 +60,9 @@ func loadSettings(path string) (Settings, error) {
 func genPassword() string {
 	const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
 	b := make([]byte, 6)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		panic(fmt.Sprintf("crypto/rand.Read failed: %v", err))
+	}
 	for i, v := range b {
 		b[i] = chars[int(v)%len(chars)]
 	}
@@ -86,7 +88,9 @@ var (
 
 func genToken() string {
 	b := make([]byte, 16)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		panic(fmt.Sprintf("crypto/rand.Read failed: %v", err))
+	}
 	return hex.EncodeToString(b)
 }
 
