@@ -301,14 +301,159 @@ func genToken() string {
 	return hex.EncodeToString(b)
 }
 
+// ─── HTTP Handlers ────────────────────────────────────────────────────────────
+
+func mountsHandler(w http.ResponseWriter, r *http.Request) {
+	mounts, err := getMounts()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(mounts)
+}
+
+func dataHandler(w http.ResponseWriter, r *http.Request) {
+	globalScanner.mu.RLock()
+	root := globalScanner.root
+	files := globalScanner.files
+	dirs := globalScanner.dirs
+	total := globalScanner.totalDisk
+	free := globalScanner.freeDisk
+	globalScanner.mu.RUnlock()
+
+	if root == nil {
+		http.Error(w, "no scan data available", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"root":      root,
+		"files":     files,
+		"dirs":      dirs,
+		"totalDisk": total,
+		"freeDisk":  free,
+	})
+}
+
+func scanHandler(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Query().Get("path")
+	if path == "" {
+		http.Error(w, "path parameter required", http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.Header().Set("Connection", "keep-alive")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	done := make(chan struct{})
+	go func() {
+		globalScanner.Scan(path)
+		close(done)
+	}()
+
+	ticker := time.NewTicker(250 * time.Millisecond)
+	defer ticker.Stop()
+
+	sendProgress := func() bool {
+		globalScanner.mu.RLock()
+		isDone := globalScanner.done
+		files := globalScanner.files
+		dirs := globalScanner.dirs
+		current := globalScanner.current
+		root := globalScanner.root
+		total := globalScanner.totalDisk
+		free := globalScanner.freeDisk
+		globalScanner.mu.RUnlock()
+
+		var data []byte
+		if isDone {
+			data, _ = json.Marshal(map[string]interface{}{
+				"status":    "done",
+				"files":     files,
+				"dirs":      dirs,
+				"root":      root,
+				"totalDisk": total,
+				"freeDisk":  free,
+			})
+		} else {
+			data, _ = json.Marshal(map[string]interface{}{
+				"status":  "scanning",
+				"files":   files,
+				"dirs":    dirs,
+				"current": current,
+			})
+		}
+		fmt.Fprintf(w, "data: %s\n\n", data)
+		flusher.Flush()
+		return isDone
+	}
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-done:
+			sendProgress()
+			return
+		case <-ticker.C:
+			if sendProgress() {
+				return
+			}
+		}
+	}
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
+
 func main() {
-	fmt.Println("SpaceMonger (stub)")
-	_ = bufio.NewScanner(nil)
-	_ = filepath.Base("")
-	_ = strings.Fields("")
-	_ = time.Now()
-	_ = syscall.Statfs_t{}
-	_ = fs.FS(nil)
-	_ = http.NewServeMux()
-	_ = log.Writer()
+	settingsPath := "settings.json"
+	cfg, err := loadSettings(settingsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			cfg = Settings{
+				Port: 4322,
+				Bind: "0.0.0.0",
+				Auth: AuthSettings{
+					Enabled:  false,
+					Password: genPassword(),
+				},
+			}
+			data, _ := json.MarshalIndent(cfg, "", "  ")
+			if writeErr := os.WriteFile(settingsPath, data, 0600); writeErr != nil {
+				log.Printf("warning: could not write settings.json: %v", writeErr)
+			}
+			log.Printf("Created settings.json — generated password: %s", cfg.Auth.Password)
+		} else {
+			log.Fatalf("failed to load settings: %v", err)
+		}
+	}
+
+	settingsMu.Lock()
+	globalSettings = cfg
+	settingsMu.Unlock()
+
+	staticFS, err := fs.Sub(staticFiles, "static")
+	if err != nil {
+		log.Fatalf("failed to access embedded static files: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle("/", http.FileServer(http.FS(staticFS)))
+	mux.HandleFunc("/api/auth", authHandler)
+	mux.HandleFunc("/api/mounts", authMiddleware(mountsHandler))
+	mux.HandleFunc("/api/scan", authMiddleware(scanHandler))
+	mux.HandleFunc("/api/data", authMiddleware(dataHandler))
+
+	addr := fmt.Sprintf("%s:%d", cfg.Bind, cfg.Port)
+	log.Printf("SpaceMonger running at http://%s", addr)
+	log.Fatal(http.ListenAndServe(addr, mux))
 }
