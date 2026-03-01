@@ -1,0 +1,17 @@
+[Unit]
+Description=SpaceMonger - Web-based Disk Space Analyzer
+After=network.target
+Documentation=https://github.com/OWNER/spacemonger
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/spacemonger
+ExecStart=/opt/spacemonger/spacemonger
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
