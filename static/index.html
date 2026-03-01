@@ -1,1 +1,86 @@
-<!DOCTYPE html><html><body>Loading...</body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SpaceMonger</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ─── Login overlay (shown when auth.enabled=true) ─────────────────────── -->
+<div id="login-overlay">
+    <div class="login-box">
+        <h2>SpaceMonger</h2>
+        <input type="password" id="login-password"
+               placeholder="Enter password" autocomplete="current-password">
+        <button id="login-btn">Login</button>
+        <div id="login-error" class="login-error"></div>
+    </div>
+</div>
+
+<!-- ─── Main application ──────────────────────────────────────────────────── -->
+<div id="app">
+
+    <!-- Title bar (Windows-style blue bar) -->
+    <div id="titlebar">SpaceMonger — Disk Space Analyzer</div>
+
+    <!-- Toolbar -->
+    <div id="toolbar">
+        <button id="btn-open"       title="Open a drive or partition">&#128194; Open</button>
+        <button id="btn-reload"     title="Reload / rescan current path">&#8635; Reload</button>
+        <div class="toolbar-sep"></div>
+        <button id="btn-zoom-full"  title="Zoom to full view" disabled>&#8862; Full</button>
+        <button id="btn-zoom-in"    title="Zoom into selected folder" disabled>&#43; In</button>
+        <button id="btn-zoom-out"   title="Zoom out one level" disabled>&#8722; Out</button>
+        <div class="toolbar-spacer"></div>
+        <button id="btn-free-space" title="Show free space proportionally">Free Space</button>
+    </div>
+
+    <!-- Breadcrumb navigation -->
+    <div id="breadcrumb"></div>
+
+    <!-- Treemap drawing area -->
+    <div id="treemap-container"></div>
+
+    <!-- Status bar -->
+    <div id="statusbar">
+        <span>Files: <span id="status-files">—</span></span>
+        <span>Dirs: <span id="status-dirs">—</span></span>
+        <span id="status-space" style="display:none">
+            Used: <span id="status-used">—</span>
+            &nbsp;|&nbsp;
+            Free: <span id="status-free">—</span>
+        </span>
+    </div>
+
+</div>
+
+<!-- ─── Scan progress overlay ─────────────────────────────────────────────── -->
+<div id="progress-overlay">
+    <div class="progress-box">
+        <h3>Scanning filesystem...</h3>
+        <p>
+            Files: <span id="progress-files">0</span>
+            &nbsp;&nbsp;
+            Folders: <span id="progress-dirs">0</span>
+        </p>
+        <p class="progress-path" id="progress-current"></p>
+    </div>
+</div>
+
+<!-- ─── Open drive modal ──────────────────────────────────────────────────── -->
+<div id="open-modal" class="modal-overlay">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3>Select Drive or Partition</h3>
+            <button id="close-open-modal">&#10005;</button>
+        </div>
+        <div class="modal-body" id="mounts-list"></div>
+    </div>
+</div>
+
+<script src="d3.v7.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
