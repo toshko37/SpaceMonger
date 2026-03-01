@@ -6,6 +6,7 @@ import (
 	"embed"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"log"
@@ -94,6 +95,7 @@ type Scanner struct {
 }
 
 var globalScanner = &Scanner{}
+var scanMu sync.Mutex
 
 func (s *Scanner) Scan(path string) {
 	s.mu.Lock()
@@ -342,6 +344,12 @@ func scanHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "path parameter required", http.StatusBadRequest)
 		return
 	}
+	path = filepath.Clean(path)
+
+	if !scanMu.TryLock() {
+		http.Error(w, "scan already in progress", http.StatusConflict)
+		return
+	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -350,12 +358,14 @@ func scanHandler(w http.ResponseWriter, r *http.Request) {
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
+		scanMu.Unlock()
 		http.Error(w, "streaming not supported", http.StatusInternalServerError)
 		return
 	}
 
 	done := make(chan struct{})
 	go func() {
+		defer scanMu.Unlock()
 		globalScanner.Scan(path)
 		close(done)
 	}()
@@ -372,10 +382,15 @@ func scanHandler(w http.ResponseWriter, r *http.Request) {
 		root := globalScanner.root
 		total := globalScanner.totalDisk
 		free := globalScanner.freeDisk
+		scanErr := globalScanner.scanErr
 		globalScanner.mu.RUnlock()
 
 		var data []byte
 		if isDone {
+			var errMsg string
+			if scanErr != nil {
+				errMsg = scanErr.Error()
+			}
 			data, _ = json.Marshal(map[string]interface{}{
 				"status":    "done",
 				"files":     files,
@@ -383,6 +398,7 @@ func scanHandler(w http.ResponseWriter, r *http.Request) {
 				"root":      root,
 				"totalDisk": total,
 				"freeDisk":  free,
+				"error":     errMsg,
 			})
 		} else {
 			data, _ = json.Marshal(map[string]interface{}{
@@ -418,7 +434,7 @@ func main() {
 	settingsPath := "settings.json"
 	cfg, err := loadSettings(settingsPath)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			cfg = Settings{
 				Port: 4322,
 				Bind: "0.0.0.0",
