@@ -55,6 +55,17 @@ fi
 chmod +x "$INSTALL_DIR/spacemonger"
 info "Downloaded spacemonger binary"
 
+# ─── Download uninstall script ────────────────────────────────────────────────
+UNINSTALL_URL="https://raw.githubusercontent.com/${REPO}/main/uninstall.sh"
+if command -v curl &>/dev/null; then
+    curl -fsSL "$UNINSTALL_URL" -o "$INSTALL_DIR/uninstall.sh" || \
+        warn "Could not download uninstall.sh"
+elif command -v wget &>/dev/null; then
+    wget -q "$UNINSTALL_URL" -O "$INSTALL_DIR/uninstall.sh" || \
+        warn "Could not download uninstall.sh"
+fi
+[ -f "$INSTALL_DIR/uninstall.sh" ] && chmod +x "$INSTALL_DIR/uninstall.sh"
+
 # ─── Generate settings.json if missing ───────────────────────────────────────
 if [ ! -f "$INSTALL_DIR/settings.json" ]; then
     PASSWORD=$(< /dev/urandom tr -dc 'a-z0-9' | head -c 6 || true)
@@ -108,17 +119,18 @@ LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}') || LOCAL_IP="<your-server
 # ─── Done ─────────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${GREEN}╔══════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║   SpaceMonger installed successfully  ║${NC}"
+echo -e "${GREEN}║  SpaceMonger installed successfully  ║${NC}"
 echo -e "${GREEN}╚══════════════════════════════════════╝${NC}"
 echo ""
 echo -e "  Local:    ${GREEN}http://localhost:4322${NC}"
 echo -e "  Network:  ${GREEN}http://${LOCAL_IP}:4322${NC}"
 echo ""
 echo "  Config:   $INSTALL_DIR/settings.json"
+echo "  Auth:     edit settings.json, then: systemctl restart $SERVICE_NAME"
 echo ""
 echo "  Commands:"
 echo "    Status:  systemctl status $SERVICE_NAME"
 echo "    Logs:    journalctl -u $SERVICE_NAME -f"
 echo "    Stop:    systemctl stop $SERVICE_NAME"
-echo "    Remove:  bash uninstall.sh"
+echo "    Remove:  bash ${INSTALL_DIR}/uninstall.sh"
 echo ""
