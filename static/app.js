@@ -551,7 +551,7 @@ document.addEventListener('keydown', e => {
             zoomOut();
         }
     }
-    if (e.key === 'Escape') closeModal('open-modal');
+    if (e.key === 'Escape') { closeModal('open-modal'); closeModal('about-modal'); }
 });
 
 // ─── Initialization ───────────────────────────────────────────────────────────
@@ -598,6 +598,22 @@ function bindEvents() {
     document.getElementById('open-modal')
         .addEventListener('click', e => {
             if (e.target === e.currentTarget) closeModal('open-modal');
+        });
+
+    document.getElementById('btn-about')
+        .addEventListener('click', () => {
+            document.getElementById('about-modal').style.display = 'flex';
+        });
+
+    document.getElementById('close-about-modal')
+        .addEventListener('click', () => closeModal('about-modal'));
+
+    document.getElementById('about-ok-btn')
+        .addEventListener('click', () => closeModal('about-modal'));
+
+    document.getElementById('about-modal')
+        .addEventListener('click', e => {
+            if (e.target === e.currentTarget) closeModal('about-modal');
         });
 
     document.getElementById('login-btn')

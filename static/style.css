@@ -356,6 +356,71 @@ html, body {
     padding: 16px;
 }
 
+/* ─── About Dialog ───────────────────────────────────────────────────────────── */
+.about-box {
+    min-width: 320px;
+    max-width: 380px;
+}
+
+.about-body {
+    padding: 18px 24px 16px;
+    text-align: center;
+}
+
+.about-logo {
+    font-size: 20px;
+    font-weight: bold;
+    color: #000080;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+}
+
+.about-sub {
+    font-size: 11px;
+    color: #444;
+    margin-bottom: 16px;
+}
+
+.about-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+    font-size: 11px;
+    margin-bottom: 16px;
+}
+
+.about-table td {
+    padding: 3px 6px;
+    vertical-align: top;
+}
+
+.about-table td:first-child {
+    color: #555;
+    white-space: nowrap;
+    width: 80px;
+}
+
+.about-table a {
+    color: #000080;
+    text-decoration: underline;
+}
+
+.about-table a:hover { color: #0000cc; }
+
+.about-ok-btn {
+    padding: 3px 24px;
+    font-size: 12px;
+    font-family: inherit;
+    background: #d4d0c8;
+    border: 1px solid;
+    border-color: #ffffff #808080 #808080 #ffffff;
+    cursor: pointer;
+    height: 22px;
+}
+
+.about-ok-btn:hover { background: #e8e4e0; }
+.about-ok-btn:active { border-color: #808080 #ffffff #ffffff #808080; }
+
 /* ─── SVG Treemap cells ──────────────────────────────────────────────────────── */
 .cell rect { transition: opacity 0.1s; }
 .cell rect:hover { opacity: 0.85; }
