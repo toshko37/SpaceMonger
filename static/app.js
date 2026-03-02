@@ -584,6 +584,12 @@ document.addEventListener('keydown', e => {
 async function init() {
     initTooltip();
 
+    fetch('/api/version').then(r => r.json()).then(d => {
+        const el = document.getElementById('about-version');
+        if (el && d.version) el.textContent = d.version;
+    }).catch(() => {});
+
+
     // Login events must be wired before the auth check so they work
     // when the overlay is shown (bindEvents is not called in that case).
     document.getElementById('login-btn')

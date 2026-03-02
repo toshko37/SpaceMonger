@@ -38,13 +38,13 @@ jobs:
           go-version: '1.21'
 
       - name: Build linux/amd64
-        run: GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o spacemonger-linux-amd64 .
+        run: GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version=${GITHUB_REF_NAME}" -o spacemonger-linux-amd64 .
 
       - name: Build linux/arm64
-        run: GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o spacemonger-linux-arm64 .
+        run: GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X main.version=${GITHUB_REF_NAME}" -o spacemonger-linux-arm64 .
 
       - name: Build linux/arm (armv7)
-        run: GOOS=linux GOARCH=arm GOARM=7 go build -ldflags="-s -w" -o spacemonger-linux-arm .
+        run: GOOS=linux GOARCH=arm GOARM=7 go build -ldflags="-s -w -X main.version=${GITHUB_REF_NAME}" -o spacemonger-linux-arm .
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

@@ -22,6 +22,8 @@ import (
 //go:embed static
 var staticFiles embed.FS
 
+var version = "dev" // overridden at build time via -ldflags "-X main.version=vX.Y.Z"
+
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
 type Settings struct {
@@ -537,6 +539,10 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.Handle("/", http.FileServer(http.FS(staticFS)))
+	mux.HandleFunc("/api/version", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"version": version})
+	})
 	mux.HandleFunc("/api/auth", authHandler)
 	mux.HandleFunc("/api/mounts", authMiddleware(mountsHandler))
 	mux.HandleFunc("/api/scan", authMiddleware(scanHandler))
