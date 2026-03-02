@@ -221,6 +221,9 @@ func parseMountsFile(path string) ([]Mount, error) {
 	}
 	defer f.Close()
 
+	// seen tracks the shortest-path mount per device to deduplicate bind mounts
+	// (e.g. container overlay storage re-mounting the same physical device).
+	seen := make(map[string]int) // device → index in mounts slice
 	var mounts []Mount
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
@@ -238,6 +241,14 @@ func parseMountsFile(path string) ([]Mount, error) {
 			m.Total = int64(stat.Blocks) * int64(stat.Bsize)
 			m.Free = int64(stat.Bavail) * int64(stat.Bsize)
 		}
+		if idx, exists := seen[device]; exists {
+			// Keep the entry with the shorter (more canonical) path
+			if len(mountPath) < len(mounts[idx].Path) {
+				mounts[idx] = m
+			}
+			continue
+		}
+		seen[device] = len(mounts)
 		mounts = append(mounts, m)
 	}
 	return mounts, sc.Err()
