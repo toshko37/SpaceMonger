@@ -41,6 +41,12 @@ info "Installing to: $INSTALL_DIR"
 # ─── Create install directory ─────────────────────────────────────────────────
 mkdir -p "$INSTALL_DIR"
 
+# ─── Stop service if already running (so we can overwrite the binary) ─────────
+if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+    systemctl stop "$SERVICE_NAME"
+    info "Stopped existing service for upgrade"
+fi
+
 # ─── Download binary ──────────────────────────────────────────────────────────
 info "Downloading $BINARY_NAME..."
 if command -v curl &>/dev/null; then
