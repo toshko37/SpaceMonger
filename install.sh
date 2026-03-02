@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # SpaceMonger Linux — Installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/techbg/spacemonger/main/install.sh | sudo bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/toshko37/SpaceMonger/main/install.sh | sudo bash
 
 set -euo pipefail
 
-REPO="techbg/spacemonger"
+REPO="toshko37/SpaceMonger"
 INSTALL_DIR="/opt/spacemonger"
 SERVICE_NAME="spacemonger"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"

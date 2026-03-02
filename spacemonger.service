@@ -1,7 +1,7 @@
 [Unit]
 Description=SpaceMonger - Web-based Disk Space Analyzer
 After=network.target
-Documentation=https://github.com/techbg/spacemonger
+Documentation=https://github.com/toshko37/SpaceMonger
 
 [Service]
 Type=simple

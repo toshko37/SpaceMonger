@@ -18,7 +18,7 @@ SpaceMonger for Windows.
 ## Quick Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/techbg/spacemonger/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/toshko37/SpaceMonger/main/install.sh | sudo bash
 ```
 
 Opens at **http://localhost:4322** (also accessible from the local network).
@@ -65,7 +65,7 @@ Press **Backspace** or **←** to go up.
 ## Build from Source
 
 ```bash
-git clone https://github.com/techbg/spacemonger.git
+git clone https://github.com/toshko37/SpaceMonger.git
 cd spacemonger
 go build -o spacemonger .
 ./spacemonger          # runs on port 4322
