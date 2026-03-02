@@ -136,6 +136,40 @@ html, body {
 
 .toolbar-spacer { flex: 1; }
 
+/* ─── Info Bar (compression / sparse notice) ────────────────────────────────── */
+#info-bar {
+    background: #ffffc0;
+    border-bottom: 1px solid #b0b000;
+    padding: 2px 8px;
+    font-size: 11px;
+    flex-shrink: 0;
+    display: none;          /* shown by JS when compression/sparse detected */
+    align-items: center;
+    gap: 6px;
+    min-height: 18px;
+    line-height: 14px;
+}
+
+#info-bar span {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#info-bar button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+    color: #666;
+    padding: 0 3px;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+#info-bar button:hover { color: #000; }
+
 /* ─── Breadcrumb ─────────────────────────────────────────────────────────────── */
 #breadcrumb {
     background: #f0f0f0;

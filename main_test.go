@@ -81,8 +81,14 @@ func TestScanner_singleFile(t *testing.T) {
 	if len(s.root.Children) != 1 {
 		t.Fatalf("expected 1 child, got %d", len(s.root.Children))
 	}
-	if s.root.Children[0].Size != 11 {
-		t.Errorf("expected size 11, got %d", s.root.Children[0].Size)
+	// Size is now actual disk allocation (st.Blocks*512), which is at least
+	// the file's content size and always a multiple of 512.
+	sz := s.root.Children[0].Size
+	if sz < 11 {
+		t.Errorf("expected size >= 11, got %d", sz)
+	}
+	if sz%512 != 0 {
+		t.Errorf("expected size to be a multiple of 512, got %d", sz)
 	}
 	if s.files != 1 {
 		t.Errorf("expected files=1, got %d", s.files)
@@ -100,8 +106,12 @@ func TestScanner_dirSizeIsSum(t *testing.T) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if s.root.Size != 300 {
-		t.Errorf("expected total size 300, got %d", s.root.Size)
+	// Actual disk usage >= content size, multiple of 512 per file.
+	if s.root.Size < 300 {
+		t.Errorf("expected total size >= 300, got %d", s.root.Size)
+	}
+	if s.root.Size%512 != 0 {
+		t.Errorf("expected total size to be a multiple of 512, got %d", s.root.Size)
 	}
 	if s.files != 2 {
 		t.Errorf("expected files=2, got %d", s.files)
@@ -120,8 +130,11 @@ func TestScanner_nested(t *testing.T) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if s.root.Size != 500 {
-		t.Errorf("expected total size 500, got %d", s.root.Size)
+	if s.root.Size < 500 {
+		t.Errorf("expected total size >= 500, got %d", s.root.Size)
+	}
+	if s.root.Size%512 != 0 {
+		t.Errorf("expected total size to be a multiple of 512, got %d", s.root.Size)
 	}
 	if s.dirs < 1 {
 		t.Errorf("expected dirs >= 1, got %d", s.dirs)

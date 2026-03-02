@@ -83,16 +83,18 @@ type FileNode struct {
 // ─── Scanner ──────────────────────────────────────────────────────────────────
 
 type Scanner struct {
-	mu        sync.RWMutex
-	root      *FileNode
-	files     int64
-	dirs      int64
-	current   string
-	done      bool
-	scanErr   error
-	totalDisk int64
-	freeDisk  int64
-	rootDev   uint64 // device ID of scan root — skip directories on other devices
+	mu         sync.RWMutex
+	root       *FileNode
+	files      int64
+	dirs       int64
+	current    string
+	done       bool
+	scanErr    error
+	totalDisk  int64
+	freeDisk   int64
+	rootDev        uint64             // device ID of scan root — skip directories on other devices
+	seenInodes     map[[2]uint64]bool // (dev, ino) → true; deduplicates hard-linked files
+	totalApparent  int64             // sum of logical file sizes (st.Size); compare to root.Size for compression/sparse stats
 }
 
 var globalScanner = &Scanner{}
@@ -108,7 +110,9 @@ func (s *Scanner) Scan(path string) {
 	s.scanErr = nil
 	s.totalDisk = 0
 	s.freeDisk = 0
-	s.rootDev = 0
+	s.rootDev       = 0
+	s.seenInodes    = make(map[[2]uint64]bool)
+	s.totalApparent = 0
 	s.mu.Unlock()
 
 	// Record the device ID of the scan root so we stay on one filesystem.
@@ -147,8 +151,33 @@ func (s *Scanner) scanDir(path string) (*FileNode, error) {
 	}
 
 	if !info.IsDir() {
-		node.Size = info.Size()
+		apparent := info.Size()  // logical size (what ls shows)
+		actual   := apparent     // fallback when syscall unavailable
+
+		if st, ok := info.Sys().(*syscall.Stat_t); ok {
+			// st.Blocks is always in 512-byte units on Linux regardless of
+			// the filesystem block size.  This gives the real on-disk
+			// footprint and automatically accounts for:
+			//   • sparse files (holes are not allocated)
+			//   • transparent compression (btrfs, ZFS) — fewer blocks used
+			actual = st.Blocks * 512
+
+			// Hard-link deduplication: multiple names → same inode → same
+			// physical blocks.  Count them only once.
+			if st.Nlink > 1 {
+				key := [2]uint64{st.Dev, st.Ino}
+				if s.seenInodes[key] {
+					actual   = 0
+					apparent = 0
+				} else {
+					s.seenInodes[key] = true
+				}
+			}
+		}
+
+		node.Size = actual
 		s.mu.Lock()
+		s.totalApparent += apparent
 		s.files++
 		s.mu.Unlock()
 		return node, nil
@@ -168,9 +197,16 @@ func (s *Scanner) scanDir(path string) (*FileNode, error) {
 		if entry.Type()&os.ModeSymlink != 0 {
 			continue // skip symlinks to avoid loops and cross-filesystem traversal
 		}
+		// Skip the ZFS .zfs virtual directory that appears at the root of every
+		// ZFS dataset.  It exposes snapshot/clone trees whose blocks overlap
+		// with the live dataset, so traversing it would inflate reported sizes.
+		if entry.IsDir() && entry.Name() == ".zfs" {
+			continue
+		}
 		childPath := filepath.Join(path, entry.Name())
 		// Skip directories that are mount points for a different filesystem
-		// (e.g. /proc, /sys, /dev) to avoid virtual/inflated sizes.
+		// (e.g. /proc, /sys, /dev, ZFS snapshot sub-mounts) to avoid
+		// virtual/inflated sizes.
 		if entry.IsDir() && s.rootDev != 0 {
 			var st syscall.Stat_t
 			if err := syscall.Stat(childPath, &st); err == nil && st.Dev != s.rootDev {
@@ -345,11 +381,12 @@ func mountsHandler(w http.ResponseWriter, r *http.Request) {
 
 func dataHandler(w http.ResponseWriter, r *http.Request) {
 	globalScanner.mu.RLock()
-	root := globalScanner.root
-	files := globalScanner.files
-	dirs := globalScanner.dirs
-	total := globalScanner.totalDisk
-	free := globalScanner.freeDisk
+	root     := globalScanner.root
+	files    := globalScanner.files
+	dirs     := globalScanner.dirs
+	total    := globalScanner.totalDisk
+	free     := globalScanner.freeDisk
+	apparent := globalScanner.totalApparent
 	globalScanner.mu.RUnlock()
 
 	if root == nil {
@@ -358,11 +395,12 @@ func dataHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"root":      root,
-		"files":     files,
-		"dirs":      dirs,
-		"totalDisk": total,
-		"freeDisk":  free,
+		"root":         root,
+		"files":        files,
+		"dirs":         dirs,
+		"totalDisk":    total,
+		"freeDisk":     free,
+		"apparentSize": apparent,
 	})
 }
 
@@ -403,14 +441,15 @@ func scanHandler(w http.ResponseWriter, r *http.Request) {
 
 	sendProgress := func() bool {
 		globalScanner.mu.RLock()
-		isDone := globalScanner.done
-		files := globalScanner.files
-		dirs := globalScanner.dirs
-		current := globalScanner.current
-		root := globalScanner.root
-		total := globalScanner.totalDisk
-		free := globalScanner.freeDisk
-		scanErr := globalScanner.scanErr
+		isDone   := globalScanner.done
+		files    := globalScanner.files
+		dirs     := globalScanner.dirs
+		current  := globalScanner.current
+		root     := globalScanner.root
+		total    := globalScanner.totalDisk
+		free     := globalScanner.freeDisk
+		apparent := globalScanner.totalApparent
+		scanErr  := globalScanner.scanErr
 		globalScanner.mu.RUnlock()
 
 		var data []byte
@@ -420,13 +459,14 @@ func scanHandler(w http.ResponseWriter, r *http.Request) {
 				errMsg = scanErr.Error()
 			}
 			data, _ = json.Marshal(map[string]interface{}{
-				"status":    "done",
-				"files":     files,
-				"dirs":      dirs,
-				"root":      root,
-				"totalDisk": total,
-				"freeDisk":  free,
-				"error":     errMsg,
+				"status":        "done",
+				"files":         files,
+				"dirs":          dirs,
+				"root":          root,
+				"totalDisk":     total,
+				"freeDisk":      free,
+				"apparentSize":  apparent,
+				"error":         errMsg,
 			})
 		} else {
 			data, _ = json.Marshal(map[string]interface{}{

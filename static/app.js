@@ -342,6 +342,30 @@ function updateStatusBar() {
         'SpaceMonger';
 }
 
+// ─── Info Bar (compression / sparse notice) ───────────────────────────────────
+function updateInfoBar() {
+    const bar = document.getElementById('info-bar');
+    if (!scanMeta) { bar.style.display = 'none'; return; }
+
+    const apparent = scanMeta.apparentSize || 0;
+    const actual   = scanMeta.root ? scanMeta.root.size : 0;
+    const saved    = apparent - actual;
+    const pct      = apparent > 0 ? saved / apparent * 100 : 0;
+
+    // Show only when the difference is meaningful (≥ 2%)
+    if (apparent > 0 && pct >= 2) {
+        const kind = pct >= 30 ? 'Compression' : 'Sparse files / compression';
+        document.getElementById('info-bar-text').textContent =
+            `\u2139 ${kind} detected \u2014 ` +
+            `Apparent: ${formatSize(apparent)}  \u2502  ` +
+            `On disk: ${formatSize(actual)}  \u2502  ` +
+            `Saved: ${formatSize(saved)} (${pct.toFixed(1)}%)`;
+        bar.style.display = 'flex';
+    } else {
+        bar.style.display = 'none';
+    }
+}
+
 // ─── Scanning (SSE) ───────────────────────────────────────────────────────────
 function startScan(path) {
     if (evtSource) { evtSource.close(); evtSource = null; }
@@ -372,11 +396,12 @@ function startScan(path) {
             evtSource = null;
 
             scanMeta = {
-                root:      msg.root,
-                files:     msg.files,
-                dirs:      msg.dirs,
-                totalDisk: msg.totalDisk || 0,
-                freeDisk:  msg.freeDisk  || 0,
+                root:         msg.root,
+                files:        msg.files,
+                dirs:         msg.dirs,
+                totalDisk:    msg.totalDisk    || 0,
+                freeDisk:     msg.freeDisk     || 0,
+                apparentSize: msg.apparentSize || 0,
             };
 
             navStack    = [scanMeta.root];
@@ -389,6 +414,7 @@ function startScan(path) {
                 updateBreadcrumb();
                 updateButtons();
                 updateStatusBar();
+                updateInfoBar();
             });
         }
     };
@@ -598,6 +624,11 @@ function bindEvents() {
     document.getElementById('open-modal')
         .addEventListener('click', e => {
             if (e.target === e.currentTarget) closeModal('open-modal');
+        });
+
+    document.getElementById('info-bar-close')
+        .addEventListener('click', () => {
+            document.getElementById('info-bar').style.display = 'none';
         });
 
     document.getElementById('btn-about')
