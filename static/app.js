@@ -584,6 +584,13 @@ document.addEventListener('keydown', e => {
 async function init() {
     initTooltip();
 
+    // Login events must be wired before the auth check so they work
+    // when the overlay is shown (bindEvents is not called in that case).
+    document.getElementById('login-btn')
+        .addEventListener('click', doLogin);
+    document.getElementById('login-password')
+        .addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
     // Check auth: if API returns 401, show login overlay
     const resp = await fetch('/api/mounts').catch(() => null);
     if (!resp || resp.status === 401) {
@@ -647,11 +654,6 @@ function bindEvents() {
             if (e.target === e.currentTarget) closeModal('about-modal');
         });
 
-    document.getElementById('login-btn')
-        .addEventListener('click', doLogin);
-
-    document.getElementById('login-password')
-        .addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 }
 
 document.addEventListener('DOMContentLoaded', init);

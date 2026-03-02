@@ -55,16 +55,51 @@ fi
 chmod +x "$INSTALL_DIR/spacemonger"
 info "Downloaded spacemonger binary"
 
-# ─── Download uninstall script ────────────────────────────────────────────────
-UNINSTALL_URL="https://raw.githubusercontent.com/${REPO}/main/uninstall.sh"
-if command -v curl &>/dev/null; then
-    curl -fsSL "$UNINSTALL_URL" -o "$INSTALL_DIR/uninstall.sh" || \
-        warn "Could not download uninstall.sh"
-elif command -v wget &>/dev/null; then
-    wget -q "$UNINSTALL_URL" -O "$INSTALL_DIR/uninstall.sh" || \
-        warn "Could not download uninstall.sh"
+# ─── Write uninstall script ───────────────────────────────────────────────────
+cat > "$INSTALL_DIR/uninstall.sh" <<'UNINSTALL'
+#!/usr/bin/env bash
+# SpaceMonger Linux — Uninstaller
+set -euo pipefail
+
+INSTALL_DIR="/opt/spacemonger"
+SERVICE_NAME="spacemonger"
+SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+
+RED='\033[0;31m'; GREEN='\033[0;32m'; NC='\033[0m'
+info()  { echo -e "${GREEN}[✓]${NC} $*"; }
+error() { echo -e "${RED}[✗]${NC} $*"; exit 1; }
+
+echo "SpaceMonger Uninstaller"
+echo "========================"
+
+[ "$EUID" -eq 0 ] || error "Please run as root: sudo bash /opt/spacemonger/uninstall.sh"
+
+if systemctl is-active  --quiet "$SERVICE_NAME" 2>/dev/null; then
+    systemctl stop "$SERVICE_NAME"
+    info "Stopped $SERVICE_NAME service"
 fi
-[ -f "$INSTALL_DIR/uninstall.sh" ] && chmod +x "$INSTALL_DIR/uninstall.sh"
+
+if systemctl is-enabled --quiet "$SERVICE_NAME" 2>/dev/null; then
+    systemctl disable "$SERVICE_NAME"
+    info "Disabled $SERVICE_NAME service"
+fi
+
+if [ -f "$SERVICE_FILE" ]; then
+    rm -f "$SERVICE_FILE"
+    systemctl daemon-reload
+    info "Removed systemd service"
+fi
+
+if [ -d "$INSTALL_DIR" ]; then
+    rm -rf "$INSTALL_DIR"
+    info "Removed $INSTALL_DIR"
+fi
+
+echo ""
+echo -e "${GREEN}SpaceMonger has been completely removed.${NC}"
+UNINSTALL
+chmod +x "$INSTALL_DIR/uninstall.sh"
+info "Wrote uninstall script"
 
 # ─── Generate settings.json if missing ───────────────────────────────────────
 if [ ! -f "$INSTALL_DIR/settings.json" ]; then

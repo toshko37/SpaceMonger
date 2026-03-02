@@ -1,8 +1,8 @@
-# SpaceMonger Linux
+# SpaceMonger Linux — Retro
 
-Web-based disk space analyzer for Linux. Displays your filesystem as an
-interactive squarified treemap with depth-based color coding — inspired by
-SpaceMonger for Windows.
+Web-based disk space analyzer for Linux with a retro Windows 98 aesthetic.
+Displays your filesystem as an interactive squarified treemap with depth-based
+color coding — inspired by SpaceMonger for Windows.
 
 ## Features
 
