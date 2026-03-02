@@ -8,6 +8,8 @@ let freeSpaceMode = false;  // free-space overlay toggle
 let lastScanPath  = null;   // path of last scan (for Reload)
 let evtSource     = null;   // active EventSource (or null)
 let tooltip       = null;   // tooltip DOM element
+let selectedNode  = null;   // single-click selected node (highlighted)
+let clickTimer    = null;   // timer to distinguish single- vs double-click
 
 // ─── Size Formatting ──────────────────────────────────────────────────────────
 function formatSize(bytes) {
@@ -30,12 +32,35 @@ function esc(s) {
         .replace(/"/g, '&quot;');
 }
 
-// ─── Color Scale (SpaceMonger: green=small → yellow → red=large) ──────────────
-function getColor(value, maxValue) {
-    if (!maxValue || maxValue === 0) return '#66bb6a';
-    const ratio = Math.min(value / maxValue, 1);
-    // d3.interpolateRdYlGn: 0=red, 1=green — we reverse: small=green, large=red
-    return d3.interpolateRdYlGn(1 - ratio);
+// ─── Depth-based Color Scale (original SpaceMonger behaviour) ────────────────
+// Every node at the same depth level gets the same colour — exactly as in the
+// original Windows SpaceMonger.  Colours are pastel (high lightness, moderate
+// saturation) extracted from the original screenshots.
+// After depth 16 the palette wraps around with the same sequence.
+// Exact colors extracted pixel-by-pixel from original SpaceMonger screenshots.
+// These are Windows GDI palette values (multiples of 0x3F/0x7F/0xBF/0xFF).
+const DEPTH_COLORS = [
+    '#ff7f7f', // depth  1  — coral / cherry-red   (rgb 255,127,127)
+    '#ffbf7f', // depth  2  — orange / peach        (rgb 255,191,127)
+    '#ffff00', // depth  3  — pure yellow            (rgb 255,255,  0)
+    '#7fff7f', // depth  4  — bright green           (rgb 127,255,127)
+    '#7fffff', // depth  5  — bright cyan            (rgb 127,255,255)
+    '#bfbfff', // depth  6  — lavender / periwinkle  (rgb 191,191,255)
+    '#bfbfbf', // depth  7  — grey                   (rgb 191,191,191)
+    '#ff7fff', // depth  8  — magenta / hot-pink     (rgb 255,127,255)
+    '#ffffbf', // depth  9  — light yellow            (rgb 255,255,191)
+    '#bfffbf', // depth 10  — light mint green        (rgb 191,255,191)
+    '#bfbf3f', // depth 11  — olive / dark yellow     (rgb 191,191, 63)
+    '#7fbf7f', // depth 12  — medium green            (rgb 127,191,127)
+    '#7fbfbf', // depth 13  — teal                    (rgb 127,191,191)
+    '#9f9fff', // depth 14  — medium lavender         (rgb 159,159,255)
+    '#9f9f9f', // depth 15  — medium grey             (rgb 159,159,159)
+    '#ffbfbf', // depth 16  — light salmon / blush    (rgb 255,191,191)
+];
+
+function getCellColor(d) {
+    const idx = (d.depth - 1) % DEPTH_COLORS.length;
+    return DEPTH_COLORS[Math.max(0, idx)];
 }
 
 // ─── Tooltip ──────────────────────────────────────────────────────────────────
@@ -86,6 +111,11 @@ function truncateSVGText(el, maxWidth) {
 
 // ─── Treemap Rendering ───────────────────────────────────────────────────────
 function renderTreemap(node) {
+    // Clear selection on every render (zoom / reload)
+    selectedNode = null;
+    clearTimeout(clickTimer);
+    clickTimer = null;
+
     const container = document.getElementById('treemap-container');
     container.innerHTML = '';
     if (!node) return;
@@ -142,9 +172,25 @@ function renderTreemap(node) {
         .paddingInner(1)
         .round(true)(root);
 
-    const maxValue = root.value;
-    const nodes    = root.descendants().filter(d => d.depth > 0);
-    const svg      = d3.select(svgEl);
+    // Only render cells that are visible (≥ threshold in each dimension).
+    // Dynamically raise the threshold so total rendered nodes stay ≤ 3000,
+    // preventing large scans from freezing the browser.
+    const MAX_NODES = 3000;
+    let threshold = 2;
+    let nodes = root.descendants().filter(d =>
+        d.depth > 0 &&
+        (d.x1 - d.x0) >= threshold &&
+        (d.y1 - d.y0) >= threshold
+    );
+    while (nodes.length > MAX_NODES && threshold < 40) {
+        threshold += 2;
+        nodes = root.descendants().filter(d =>
+            d.depth > 0 &&
+            (d.x1 - d.x0) >= threshold &&
+            (d.y1 - d.y0) >= threshold
+        );
+    }
+    const svg = d3.select(svgEl);
 
     const cell = svg.selectAll('g.cell')
         .data(nodes)
@@ -156,11 +202,26 @@ function renderTreemap(node) {
     cell.append('rect')
         .attr('width',  d => Math.max(0, d.x1 - d.x0 - 0.5))
         .attr('height', d => Math.max(0, d.y1 - d.y0 - 0.5))
-        .attr('fill',   d => getColor(d.value, maxValue))
-        .attr('stroke', 'rgba(0,0,0,0.25)')
+        .attr('fill',   d => getCellColor(d))
+        .attr('stroke',       d => d3.color(getCellColor(d)).darker(0.6).formatHex())
         .attr('stroke-width', 0.5)
         .style('cursor', d => (d.data.isDir && d.data.children) ? 'pointer' : 'default')
-        .on('click',     (ev, d) => { ev.stopPropagation(); handleClick(d); })
+        .on('click', (ev, d) => {
+            ev.stopPropagation();
+            // Start timer — if no second click arrives within 220 ms, treat as single-click
+            clearTimeout(clickTimer);
+            clickTimer = setTimeout(() => {
+                clickTimer = null;
+                handleSelect(d);
+            }, 220);
+        })
+        .on('dblclick', (ev, d) => {
+            ev.stopPropagation();
+            // Cancel the pending single-click action and zoom in instead
+            clearTimeout(clickTimer);
+            clickTimer = null;
+            handleZoom(d);
+        })
         .on('mouseover', (ev, d) => showTooltip(ev, d.data, d.value))
         .on('mousemove', moveTooltip)
         .on('mouseout',  hideTooltip);
@@ -188,8 +249,20 @@ function renderTreemap(node) {
         .each(function(d) { truncateSVGText(this, d.x1 - d.x0 - 6); });
 }
 
-function handleClick(d) {
+// Single click — select / deselect a node (black border, thicker stroke)
+function handleSelect(d) {
+    selectedNode = (selectedNode === d) ? null : d;
+    d3.selectAll('.cell rect')
+        .attr('stroke',       n => n === selectedNode
+            ? '#000000'
+            : d3.color(getCellColor(n)).darker(0.6).formatHex())
+        .attr('stroke-width', n => n === selectedNode ? 2.5 : 0.5);
+}
+
+// Double click — zoom into a directory
+function handleZoom(d) {
     if (d.data.isDir && d.data.children && d.data.children.length > 0) {
+        selectedNode = null;
         zoomInto(d.data);
     }
 }
@@ -281,6 +354,17 @@ function startScan(path) {
 
     es.onmessage = function(e) {
         const msg = JSON.parse(e.data);
+
+        // Server sends "building" immediately after scan finishes, before it
+        // serialises the full tree JSON.  Switch the overlay text right away
+        // so the user never sees a frozen "last folder" state.
+        if (msg.status === 'building') {
+            document.getElementById('progress-title').textContent = 'Building treemap\u2026';
+            document.getElementById('progress-counts').style.display = 'none';
+            document.getElementById('progress-current').textContent = '';
+            return;
+        }
+
         updateProgressUI(msg);
 
         if (msg.status === 'done') {
@@ -298,11 +382,14 @@ function startScan(path) {
             navStack    = [scanMeta.root];
             currentNode = scanMeta.root;
 
-            hideProgress();
-            renderTreemap(currentNode);
-            updateBreadcrumb();
-            updateButtons();
-            updateStatusBar();
+            // Show "Building treemap…" while D3 computes layout,
+            // then hide overlay once rendering is done.
+            withRenderOverlay(() => {
+                renderTreemap(currentNode);
+                updateBreadcrumb();
+                updateButtons();
+                updateStatusBar();
+            });
         }
     };
 
@@ -315,10 +402,32 @@ function startScan(path) {
 }
 
 function showProgress() {
-    document.getElementById('progress-overlay').style.display = 'flex';
+    const ov = document.getElementById('progress-overlay');
+    document.getElementById('progress-title').textContent  = 'Scanning filesystem...';
+    document.getElementById('progress-counts').style.display = '';
+    ov.style.display = 'flex';
 }
 function hideProgress() {
     document.getElementById('progress-overlay').style.display = 'none';
+}
+
+// Show "Building treemap…" overlay, let the browser repaint, then call fn().
+// This prevents the frozen-UI effect after a large scan completes.
+function withRenderOverlay(fn) {
+    const ov    = document.getElementById('progress-overlay');
+    const title = document.getElementById('progress-title');
+    const counts = document.getElementById('progress-counts');
+    title.textContent     = 'Building treemap\u2026';
+    counts.style.display  = 'none';
+    document.getElementById('progress-current').textContent = '';
+    ov.style.display = 'flex';
+
+    // Two rAF calls: first lets the browser paint the overlay,
+    // second gives it one more frame before the heavy JS starts.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        fn();
+        hideProgress();
+    }));
 }
 function updateProgressUI(msg) {
     document.getElementById('progress-files').textContent = (msg.files || 0).toLocaleString();
@@ -430,7 +539,7 @@ let resizeTimer = null;
 window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
-        if (currentNode) renderTreemap(currentNode);
+        if (currentNode) withRenderOverlay(() => renderTreemap(currentNode));
     }, 150);
 });
 

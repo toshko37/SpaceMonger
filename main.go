@@ -92,6 +92,7 @@ type Scanner struct {
 	scanErr   error
 	totalDisk int64
 	freeDisk  int64
+	rootDev   uint64 // device ID of scan root — skip directories on other devices
 }
 
 var globalScanner = &Scanner{}
@@ -107,7 +108,14 @@ func (s *Scanner) Scan(path string) {
 	s.scanErr = nil
 	s.totalDisk = 0
 	s.freeDisk = 0
+	s.rootDev = 0
 	s.mu.Unlock()
+
+	// Record the device ID of the scan root so we stay on one filesystem.
+	var rootStat syscall.Stat_t
+	if err := syscall.Stat(path, &rootStat); err == nil {
+		s.rootDev = rootStat.Dev
+	}
 
 	var stat syscall.Statfs_t
 	if err := syscall.Statfs(path, &stat); err == nil {
@@ -160,7 +168,16 @@ func (s *Scanner) scanDir(path string) (*FileNode, error) {
 		if entry.Type()&os.ModeSymlink != 0 {
 			continue // skip symlinks to avoid loops and cross-filesystem traversal
 		}
-		child, err := s.scanDir(filepath.Join(path, entry.Name()))
+		childPath := filepath.Join(path, entry.Name())
+		// Skip directories that are mount points for a different filesystem
+		// (e.g. /proc, /sys, /dev) to avoid virtual/inflated sizes.
+		if entry.IsDir() && s.rootDev != 0 {
+			var st syscall.Stat_t
+			if err := syscall.Stat(childPath, &st); err == nil && st.Dev != s.rootDev {
+				continue
+			}
+		}
+		child, err := s.scanDir(childPath)
 		if err != nil {
 			continue
 		}
@@ -418,6 +435,11 @@ func scanHandler(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		case <-done:
+			// Send a lightweight "building" signal immediately so the browser
+			// can switch its UI to "Building treemap…" before we spend time
+			// JSON-serialising the entire file tree (which can take seconds).
+			fmt.Fprintf(w, "data: {\"status\":\"building\"}\n\n")
+			flusher.Flush()
 			sendProgress()
 			return
 		case <-ticker.C:
