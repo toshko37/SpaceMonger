@@ -25,8 +25,9 @@ const (
 // ─── Sessions ─────────────────────────────────────────────────────────────────
 
 var (
-	sessions  = make(map[string]time.Time) // token → expiry
-	sessionMu sync.RWMutex
+	sessions      = make(map[string]time.Time) // token → expiry
+	sessionMu     sync.RWMutex
+	secureCookies bool // set when serving over TLS
 )
 
 func genToken() string {
@@ -191,6 +192,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		Value:    createSession(),
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   secureCookies,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   int(sessionTTL.Seconds()),
 	})

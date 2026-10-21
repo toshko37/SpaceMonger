@@ -1,11 +1,15 @@
 package main
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -16,8 +20,47 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	json.NewEncoder(w).Encode(v)
 }
 
+// ─── gzip ─────────────────────────────────────────────────────────────────────
+
+type gzipWriter struct {
+	http.ResponseWriter
+	gz io.Writer
+}
+
+func (g gzipWriter) Write(b []byte) (int, error) { return g.gz.Write(b) }
+
+// gzipMiddleware compresses responses for clients that accept it. Used for
+// the large tree payloads (/api/data, /api/export): names compress 5-10x.
+func gzipMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			next(w, r)
+			return
+		}
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Add("Vary", "Accept-Encoding")
+		gz, _ := gzip.NewWriterLevel(w, gzip.BestSpeed)
+		defer gz.Close()
+		next(gzipWriter{ResponseWriter: w, gz: gz}, r)
+	}
+}
+
+// ─── Simple endpoints ─────────────────────────────────────────────────────────
+
 func versionHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"version": version})
+}
+
+// configHandler exposes the settings the UI needs to adapt to.
+func configHandler(w http.ResponseWriter, r *http.Request) {
+	cfg := getSettings()
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"version":     version,
+		"allowDelete": cfg.AllowDelete,
+		"historySize": cfg.HistorySize,
+		"exclude":     cfg.Exclude,
+		"tls":         cfg.TLS.Enabled(),
+	})
 }
 
 func mountsHandler(w http.ResponseWriter, r *http.Request) {
@@ -32,17 +75,20 @@ func mountsHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, mounts)
 }
 
-// resultPayload is the JSON shape of a finished scan, shared by the SSE
-// "done" event and GET /api/data.
-func resultPayload(snap ScanSnapshot) map[string]interface{} {
+// ─── Scan results ─────────────────────────────────────────────────────────────
+
+// resultPayload is the JSON shape of a finished scan. withRoot=false yields
+// the metadata only (used by the SSE "done" event; the tree itself is then
+// fetched gzip-compressed from /api/data).
+func resultPayload(id string, snap ScanSnapshot, withRoot bool) map[string]interface{} {
 	errMsg := ""
 	if snap.Err != nil {
 		errMsg = snap.Err.Error()
 	}
-	return map[string]interface{}{
+	m := map[string]interface{}{
 		"status":       "done",
+		"id":           id,
 		"path":         snap.Path,
-		"root":         snap.Root,
 		"files":        snap.Files,
 		"dirs":         snap.Dirs,
 		"totalDisk":    snap.TotalDisk,
@@ -52,17 +98,77 @@ func resultPayload(snap ScanSnapshot) map[string]interface{} {
 		"durationMs":   snap.FinishedAt.Sub(snap.StartedAt).Milliseconds(),
 		"error":        errMsg,
 	}
+	if snap.Root != nil {
+		m["size"] = snap.Root.Size
+	}
+	if withRoot {
+		m["root"] = snap.Root
+	}
+	return m
 }
 
-// dataHandler returns the last completed scan so a reloaded page can
-// restore its view without rescanning.
+// dataHandler returns a stored scan (latest by default, or ?id=).
 func dataHandler(w http.ResponseWriter, r *http.Request) {
-	snap := globalScanner.Snapshot()
-	if !snap.Done || snap.Root == nil {
-		writeJSON(w, http.StatusOK, map[string]interface{}{"status": "none", "root": nil})
+	id := r.URL.Query().Get("id")
+	err := store.Read(id, func(res *ScanResult) {
+		writeJSON(w, http.StatusOK, resultPayload(res.ID, res.Snap, true))
+	})
+	if err != nil {
+		if id == "" {
+			writeJSON(w, http.StatusOK, map[string]interface{}{"status": "none", "root": nil})
+			return
+		}
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+	}
+}
+
+// scansHandler: GET lists stored scans; DELETE ?id= removes one.
+func scansHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, http.StatusOK, store.List())
+	case http.MethodDelete:
+		if !store.Remove(r.URL.Query().Get("id")) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "scan not found"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// compareHandler: GET ?a=<older id>&b=<newer id>&limit=300
+func compareHandler(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	if limit <= 0 || limit > 5000 {
+		limit = 300
+	}
+	var a, b *ScanResult
+	err := store.Read(q.Get("a"), func(res *ScanResult) {
+		a = res
+		if e := store.find(q.Get("b")); e != nil { // same lock already held
+			b = e
+		}
+	})
+	if err != nil || b == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "scan not found"})
 		return
 	}
-	writeJSON(w, http.StatusOK, resultPayload(snap))
+	if a.Snap.Path != b.Snap.Path {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "scans are of different paths"})
+		return
+	}
+	store.mu.RLock()
+	changes, sum := compareTrees(a.Snap.Root, b.Snap.Root, limit)
+	store.mu.RUnlock()
+	if changes == nil {
+		changes = []Change{}
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"a": metaOf(a), "b": metaOf(b), "summary": sum, "changes": changes,
+	})
 }
 
 // ─── Scan (SSE) ───────────────────────────────────────────────────────────────
@@ -114,11 +220,19 @@ func scanHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Accel-Buffering", "no")
 	w.Header().Set("Connection", "keep-alive")
 
-	done := make(chan struct{})
+	cfg := getSettings()
+	globalScanner.Exclude = cfg.Exclude
+	globalScanner.Workers = cfg.effectiveWorkers()
+
+	done := make(chan *ScanResult, 1)
 	go func() {
 		defer scanMu.Unlock()
 		defer close(done)
 		globalScanner.Scan(ctx, path)
+		snap := globalScanner.Snapshot()
+		if snap.Root != nil && snap.Err == nil {
+			done <- store.Add(snap)
+		}
 	}()
 
 	send := func(v interface{}) {
@@ -136,11 +250,12 @@ func scanHandler(w http.ResponseWriter, r *http.Request) {
 			// Client disconnected or superseded by a newer scan; the scan
 			// goroutine notices the cancelled ctx and exits on its own.
 			return
-		case <-done:
-			// "building" lets the browser switch its UI before we spend
-			// time serialising a possibly huge tree.
-			send(map[string]string{"status": "building"})
-			send(resultPayload(globalScanner.Snapshot()))
+		case res, ok := <-done:
+			if !ok || res == nil { // scan failed or was cancelled
+				send(resultPayload("", globalScanner.Snapshot(), false))
+				return
+			}
+			send(resultPayload(res.ID, res.Snap, false))
 			return
 		case <-ticker.C:
 			snap := globalScanner.Snapshot()

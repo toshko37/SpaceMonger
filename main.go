@@ -40,6 +40,8 @@ func main() {
 		log.Fatalf("failed to load settings: %v", err)
 	}
 	setSettings(cfg)
+	store.SetMax(cfg.HistorySize)
+	secureCookies = cfg.TLS.Enabled()
 
 	staticFS, err := fs.Sub(staticFiles, "static")
 	if err != nil {
@@ -51,9 +53,14 @@ func main() {
 	mux.HandleFunc("/api/version", versionHandler)
 	mux.HandleFunc("/api/auth", authHandler)
 	mux.HandleFunc("/api/logout", logoutHandler)
+	mux.HandleFunc("/api/config", authMiddleware(configHandler))
 	mux.HandleFunc("/api/mounts", authMiddleware(mountsHandler))
 	mux.HandleFunc("/api/scan", authMiddleware(scanHandler))
-	mux.HandleFunc("/api/data", authMiddleware(dataHandler))
+	mux.HandleFunc("/api/scans", authMiddleware(scansHandler))
+	mux.HandleFunc("/api/data", authMiddleware(gzipMiddleware(dataHandler)))
+	mux.HandleFunc("/api/compare", authMiddleware(compareHandler))
+	mux.HandleFunc("/api/export", authMiddleware(gzipMiddleware(exportHandler)))
+	mux.HandleFunc("/api/delete", authMiddleware(deleteHandler))
 
 	addr := fmt.Sprintf("%s:%d", cfg.Bind, cfg.Port)
 	srv := &http.Server{
@@ -68,8 +75,16 @@ func main() {
 	if cfg.Auth.Enabled {
 		authState = "enabled"
 	}
-	log.Printf("SpaceMonger %s listening on http://%s (auth %s)", version, addr, authState)
-	if err := srv.ListenAndServe(); err != nil {
-		log.Fatal(err)
+	scheme := "http"
+	if cfg.TLS.Enabled() {
+		scheme = "https"
 	}
+	log.Printf("SpaceMonger %s listening on %s://%s (auth %s, %d scan workers, delete %v)",
+		version, scheme, addr, authState, cfg.effectiveWorkers(), cfg.AllowDelete)
+	if cfg.TLS.Enabled() {
+		err = srv.ListenAndServeTLS(cfg.TLS.Cert, cfg.TLS.Key)
+	} else {
+		err = srv.ListenAndServe()
+	}
+	log.Fatal(err)
 }

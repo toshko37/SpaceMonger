@@ -121,3 +121,42 @@ func TestScanner_cancelled(t *testing.T) {
 		t.Errorf("expected cancelled scan with nil root, got root=%v err=%v", snap.Root, snap.Err)
 	}
 }
+
+func TestScanner_excludes(t *testing.T) {
+	dir := t.TempDir()
+	os.Mkdir(filepath.Join(dir, "node_modules"), 0755)
+	os.WriteFile(filepath.Join(dir, "node_modules", "x"), make([]byte, 4096), 0644)
+	os.Mkdir(filepath.Join(dir, "cache"), 0755)
+	os.WriteFile(filepath.Join(dir, "cache", "y"), make([]byte, 4096), 0644)
+	os.WriteFile(filepath.Join(dir, "keep.txt"), make([]byte, 4096), 0644)
+	os.WriteFile(filepath.Join(dir, "skip.tmp"), make([]byte, 4096), 0644)
+
+	s := &Scanner{Exclude: []string{"node_modules", filepath.Join(dir, "cache"), "*.tmp"}}
+	s.Scan(context.Background(), dir)
+	snap := s.Snapshot()
+	if snap.Files != 1 || len(snap.Root.Children) != 1 || snap.Root.Children[0].Name != "keep.txt" {
+		t.Errorf("excludes not applied: files=%d children=%+v", snap.Files, snap.Root.Children)
+	}
+}
+
+func TestScanner_parallelMatchesSequential(t *testing.T) {
+	dir := t.TempDir()
+	for i := 0; i < 8; i++ {
+		d := filepath.Join(dir, "d"+string(rune('a'+i)))
+		os.MkdirAll(filepath.Join(d, "deep", "deeper"), 0755)
+		for j := 0; j < 5; j++ {
+			os.WriteFile(filepath.Join(d, "deep", "deeper", "f"+string(rune('a'+j))), make([]byte, 1024*(j+1)), 0644)
+		}
+	}
+	seq := &Scanner{Workers: 1}
+	seq.Scan(context.Background(), dir)
+	par := &Scanner{Workers: 8}
+	par.Scan(context.Background(), dir)
+	a, b := seq.Snapshot(), par.Snapshot()
+	if a.Root.Size != b.Root.Size || a.Files != b.Files || a.Dirs != b.Dirs || a.Apparent != b.Apparent {
+		t.Errorf("parallel mismatch: seq=%+v par=%+v", a, b)
+	}
+	if len(a.Root.Children) != len(b.Root.Children) {
+		t.Errorf("children mismatch %d vs %d", len(a.Root.Children), len(b.Root.Children))
+	}
+}

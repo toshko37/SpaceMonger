@@ -1,6 +1,7 @@
 package main
 
 import (
+	"compress/gzip"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -38,8 +39,11 @@ func TestScanHandler_completesWithDone(t *testing.T) {
 	if ct := w.Header().Get("Content-Type"); ct != "text/event-stream" {
 		t.Errorf("expected SSE content type, got %q", ct)
 	}
-	if msg["status"] != "done" || msg["error"] != "" || msg["root"] == nil {
+	if msg["status"] != "done" || msg["error"] != "" || msg["id"] == "" || msg["size"] == nil {
 		t.Errorf("unexpected done event: %v", msg)
+	}
+	if _, hasRoot := msg["root"]; hasRoot {
+		t.Error("done event must not carry the tree; it is fetched from /api/data")
 	}
 	if msg["path"] != dir {
 		t.Errorf("expected path %q, got %v", dir, msg["path"])
@@ -108,10 +112,30 @@ func TestDataHandler_returnsLastScan(t *testing.T) {
 	if msg["path"] != dir || msg["root"] == nil {
 		t.Errorf("unexpected data payload: %v", msg)
 	}
+
+	// By id, gzip-compressed when accepted.
+	req := httptest.NewRequest(http.MethodGet, "/api/data?id="+msg["id"].(string), nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	w = httptest.NewRecorder()
+	gzipMiddleware(dataHandler)(w, req)
+	if w.Header().Get("Content-Encoding") != "gzip" {
+		t.Fatalf("expected gzip encoding, got %q", w.Header().Get("Content-Encoding"))
+	}
+	gz, err := gzip.NewReader(w.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var byID map[string]interface{}
+	if err := json.NewDecoder(gz).Decode(&byID); err != nil || byID["id"] != msg["id"] {
+		t.Errorf("bad gzip payload: %v %v", err, byID)
+	}
 }
 
 func TestDataHandler_noneWhenNoScan(t *testing.T) {
-	runScan(t, "/nonexistent/path/xyz") // leaves root == nil
+	store.mu.Lock()
+	store.items = nil
+	store.mu.Unlock()
+	runScan(t, "/nonexistent/path/xyz") // failed scans are not stored
 	w := httptest.NewRecorder()
 	dataHandler(w, httptest.NewRequest(http.MethodGet, "/api/data", nil))
 	var msg map[string]interface{}

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -35,8 +36,11 @@ func TestLoadSettings_defaultsForMissingFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.Port != 4322 || s.Bind != "0.0.0.0" {
-		t.Errorf("expected defaults, got port=%d bind=%q", s.Port, s.Bind)
+	if s.Port != 4322 || s.Bind != "0.0.0.0" || s.HistorySize != defaultHistorySize || s.Exclude == nil {
+		t.Errorf("expected defaults, got %+v", s)
+	}
+	if s.effectiveWorkers() < 2 {
+		t.Errorf("expected at least 2 workers, got %d", s.effectiveWorkers())
 	}
 }
 
@@ -51,7 +55,7 @@ func TestSaveSettings_roundTripAndMode(t *testing.T) {
 		t.Errorf("expected mode 0600, got %o", fi.Mode().Perm())
 	}
 	out, err := loadSettings(p)
-	if err != nil || out != in {
+	if err != nil || !reflect.DeepEqual(out, in) {
 		t.Errorf("round trip mismatch: %+v vs %+v (%v)", out, in, err)
 	}
 }
