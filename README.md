@@ -84,6 +84,9 @@ times `historySize`. After `releaseAfter` of inactivity the scans are dropped
 and the process returns to about 10 MB; the next visit simply rescans. On
 small machines use `"historySize": 1` and a short `releaseAfter`.
 
+The tree is written to the browser node by node, so sending it needs no extra
+memory regardless of its size.
+
 Restart after changes: `sudo systemctl restart spacemonger`.
 
 The binary also accepts `-settings /path/to/settings.json`.
@@ -165,6 +168,8 @@ store.go      in-memory history of completed scans, tree helpers
 compare.go    diff of two scans
 delete.go     guarded deletion
 export.go     CSV / JSON export
+stream.go     allocation-free JSON writer for large trees
+idle.go       idle release and memory trimming
 handlers.go   HTTP / SSE handlers, gzip
 static/js/    UI modules (state, treemap, nav, panel, filters, scan, history, app)
 ```

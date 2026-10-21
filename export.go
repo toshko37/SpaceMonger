@@ -1,8 +1,8 @@
 package main
 
 import (
+	"bufio"
 	"encoding/csv"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -44,13 +44,16 @@ func exportHandler(w http.ResponseWriter, r *http.Request) {
 
 		if format == "json" {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"path": abs, "scannedAt": res.Snap.FinishedAt.Unix(), "root": node,
-			})
+			writeObjectWithTree(w, map[string]interface{}{
+				"path": abs, "scannedAt": res.Snap.FinishedAt.Unix(),
+			}, "root", node)
+			trimMemory()
 			return
 		}
 		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
-		cw := csv.NewWriter(w)
+		bw := bufio.NewWriterSize(w, streamBufSize)
+		defer bw.Flush()
+		cw := csv.NewWriter(bw)
 		cw.Write([]string{"path", "type", "size_bytes", "modified"})
 		var walk func(n *FileNode, p string)
 		walk = func(n *FileNode, p string) {
@@ -65,6 +68,7 @@ func exportHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		walk(node, abs)
 		cw.Flush()
+		trimMemory()
 	})
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})

@@ -111,8 +111,11 @@ func resultPayload(id string, snap ScanSnapshot, withRoot bool) map[string]inter
 func dataHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	err := store.Read(id, func(res *ScanResult) {
-		writeJSON(w, http.StatusOK, resultPayload(res.ID, res.Snap, true))
-		trimMemory() // the encoded tree is garbage once written
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		// Errors here mean the client went away; nothing useful to report.
+		writeObjectWithTree(w, resultPayload(res.ID, res.Snap, false), "root", res.Snap.Root)
+		trimMemory()
 	})
 	if err != nil {
 		if id == "" {
