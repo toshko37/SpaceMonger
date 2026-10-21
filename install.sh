@@ -126,7 +126,8 @@ if [ ! -f "$INSTALL_DIR/settings.json" ]; then
   "exclude": [],
   "scanWorkers": 0,
   "historySize": 5,
-  "allowDelete": false
+  "allowDelete": false,
+  "releaseAfter": "30m"
 }
 SETTINGS
     chmod 600 "$INSTALL_DIR/settings.json"

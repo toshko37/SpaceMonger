@@ -58,7 +58,8 @@ sudo bash /opt/spacemonger/uninstall.sh
   "exclude": ["/var/lib/docker", "node_modules", "*.tmp"],
   "scanWorkers": 0,
   "historySize": 5,
-  "allowDelete": false
+  "allowDelete": false,
+  "releaseAfter": "30m"
 }
 ```
 
@@ -73,6 +74,15 @@ sudo bash /opt/spacemonger/uninstall.sh
 | `scanWorkers`   | Concurrent directory readers; `0` = number of CPUs (2–16)           |
 | `historySize`   | Completed scans kept in memory for history and compare (1–20)       |
 | `allowDelete`   | Enable the Delete button. Off by default                            |
+| `releaseAfter`  | Drop stored scans and return memory to the OS after this long without activity (`"30m"`, `"2h"`; `"0"` = never) |
+
+### Memory use
+
+Each scanned file or folder costs about 100 bytes while a scan is stored, so a
+root filesystem with 2 million entries holds roughly 200 MB per stored scan,
+times `historySize`. After `releaseAfter` of inactivity the scans are dropped
+and the process returns to about 10 MB; the next visit simply rescans. On
+small machines use `"historySize": 1` and a short `releaseAfter`.
 
 Restart after changes: `sudo systemctl restart spacemonger`.
 

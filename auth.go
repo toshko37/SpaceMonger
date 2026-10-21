@@ -82,6 +82,7 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 			return
 		}
+		touchActivity()
 		next(w, r)
 	}
 }

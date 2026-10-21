@@ -160,3 +160,14 @@ func TestScanner_parallelMatchesSequential(t *testing.T) {
 		t.Errorf("children mismatch %d vs %d", len(a.Root.Children), len(b.Root.Children))
 	}
 }
+
+func TestScanner_childrenSlicesAreExact(t *testing.T) {
+	dir := t.TempDir()
+	for i := 0; i < 37; i++ { // not a power of two, so append() leaves slack
+		os.WriteFile(filepath.Join(dir, "f"+string(rune('a'+i%26))+string(rune('a'+i/26))), []byte("x"), 0644)
+	}
+	snap := scanTemp(t, dir)
+	if cap(snap.Root.Children) != len(snap.Root.Children) {
+		t.Errorf("children slice not compacted: len=%d cap=%d", len(snap.Root.Children), cap(snap.Root.Children))
+	}
+}

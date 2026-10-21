@@ -121,6 +121,13 @@ func (s *Scanner) Scan(ctx context.Context, path string) {
 	s.mu.Unlock()
 }
 
+// Release drops the last result so its memory can be reclaimed.
+func (s *Scanner) Release() {
+	s.mu.Lock()
+	s.root = nil
+	s.mu.Unlock()
+}
+
 func (s *Scanner) Snapshot() ScanSnapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -288,6 +295,15 @@ func (s *Scanner) scanDir(path string) (*FileNode, error) {
 		addChild(child)
 	}
 	wg.Wait()
+
+	// append() over-allocates by up to 2x; a scan of millions of entries
+	// wastes a lot of RAM in that slack. Copy into an exactly sized slice
+	// so the oversized backing array is garbage collected.
+	if cap(node.Children) > len(node.Children) {
+		exact := make([]*FileNode, len(node.Children))
+		copy(exact, node.Children)
+		node.Children = exact
+	}
 
 	// One lock per directory instead of one per file.
 	s.mu.Lock()

@@ -42,6 +42,8 @@ func main() {
 	setSettings(cfg)
 	store.SetMax(cfg.HistorySize)
 	secureCookies = cfg.TLS.Enabled()
+	touchActivity()
+	go idleReleaser(cfg.releaseAfterDuration())
 
 	staticFS, err := fs.Sub(staticFiles, "static")
 	if err != nil {

@@ -108,6 +108,19 @@ func (st *ScanStore) Remove(id string) bool {
 	return false
 }
 
+func (st *ScanStore) Len() int {
+	st.mu.RLock()
+	defer st.mu.RUnlock()
+	return len(st.items)
+}
+
+// Clear forgets every stored scan.
+func (st *ScanStore) Clear() {
+	st.mu.Lock()
+	st.items = nil
+	st.mu.Unlock()
+}
+
 func (st *ScanStore) List() []ScanMeta {
 	st.mu.RLock()
 	defer st.mu.RUnlock()

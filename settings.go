@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime"
 	"sync"
+	"time"
 )
 
 // Settings is the on-disk configuration (settings.json).
@@ -19,6 +20,9 @@ type Settings struct {
 	ScanWorkers int          `json:"scanWorkers"` // 0 = number of CPUs
 	HistorySize int          `json:"historySize"` // completed scans kept in memory
 	AllowDelete bool         `json:"allowDelete"` // enable deleting files from the UI
+	// ReleaseAfter drops stored scans and returns memory to the OS after this
+	// much time without API activity, e.g. "30m". "0" keeps them forever.
+	ReleaseAfter string `json:"releaseAfter"`
 }
 
 type AuthSettings struct {
@@ -35,10 +39,11 @@ type TLSSettings struct {
 func (t TLSSettings) Enabled() bool { return t.Cert != "" && t.Key != "" }
 
 const (
-	defaultPort        = 4322
-	defaultHistorySize = 5
-	maxHistorySize     = 20
-	maxScanWorkers     = 32
+	defaultReleaseAfter = "30m"
+	defaultPort         = 4322
+	defaultHistorySize  = 5
+	maxHistorySize      = 20
+	maxScanWorkers      = 32
 )
 
 var (
@@ -92,7 +97,19 @@ func normalize(s Settings) Settings {
 	if s.ScanWorkers > maxScanWorkers {
 		s.ScanWorkers = maxScanWorkers
 	}
+	if s.ReleaseAfter == "" {
+		s.ReleaseAfter = defaultReleaseAfter
+	}
 	return s
+}
+
+// releaseAfterDuration parses ReleaseAfter; 0 means never release.
+func (s Settings) releaseAfterDuration() time.Duration {
+	d, err := time.ParseDuration(s.ReleaseAfter)
+	if err != nil || d < 0 {
+		return 0
+	}
+	return d
 }
 
 // effectiveWorkers resolves ScanWorkers == 0 to a CPU-based default.

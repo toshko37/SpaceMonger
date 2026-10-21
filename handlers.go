@@ -112,6 +112,7 @@ func dataHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	err := store.Read(id, func(res *ScanResult) {
 		writeJSON(w, http.StatusOK, resultPayload(res.ID, res.Snap, true))
+		trimMemory() // the encoded tree is garbage once written
 	})
 	if err != nil {
 		if id == "" {
@@ -229,6 +230,8 @@ func scanHandler(w http.ResponseWriter, r *http.Request) {
 		defer scanMu.Unlock()
 		defer close(done)
 		globalScanner.Scan(ctx, path)
+		touchActivity()
+		defer trimMemory()
 		snap := globalScanner.Snapshot()
 		if snap.Root != nil && snap.Err == nil {
 			done <- store.Add(snap)
