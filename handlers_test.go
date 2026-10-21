@@ -110,12 +110,14 @@ func TestDataHandler_returnsLastScan(t *testing.T) {
 	}
 }
 
-func TestDataHandler_404WhenNoScan(t *testing.T) {
+func TestDataHandler_noneWhenNoScan(t *testing.T) {
 	runScan(t, "/nonexistent/path/xyz") // leaves root == nil
 	w := httptest.NewRecorder()
 	dataHandler(w, httptest.NewRequest(http.MethodGet, "/api/data", nil))
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected 404, got %d", w.Code)
+	var msg map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &msg)
+	if w.Code != http.StatusOK || msg["status"] != "none" || msg["root"] != nil {
+		t.Errorf("expected status none with nil root, got %d %v", w.Code, msg)
 	}
 }
 

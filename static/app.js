@@ -127,7 +127,7 @@ const HEADER_H  = 20;
 function renderTreemap() {
     const node = state.current;
     const container = $('treemap-container');
-    container.querySelectorAll('svg, .free-space-panel').forEach(e => e.remove());
+    container.querySelectorAll(':scope > svg, :scope > .free-space-panel').forEach(e => e.remove());
     $('empty-state').hidden = !!node;
     setSelected(null);
     if (!node) return;
@@ -577,7 +577,7 @@ async function restoreLastScan() {
         if (resp.status === 401) { showLogin(); return; }
         if (!resp.ok) { refreshView(); return; }
         const msg = await resp.json();
-        if (msg.root) { applyScanResult(msg); renderWithOverlay(); }
+        if (msg.root) { applyScanResult(msg); renderWithOverlay(); } else { refreshView(); }
     } catch (e) {
         refreshView();
     }

@@ -59,7 +59,7 @@ func resultPayload(snap ScanSnapshot) map[string]interface{} {
 func dataHandler(w http.ResponseWriter, r *http.Request) {
 	snap := globalScanner.Snapshot()
 	if !snap.Done || snap.Root == nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no scan data available"})
+		writeJSON(w, http.StatusOK, map[string]interface{}{"status": "none", "root": nil})
 		return
 	}
 	writeJSON(w, http.StatusOK, resultPayload(snap))
