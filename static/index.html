@@ -36,6 +36,16 @@
         <symbol id="i-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></symbol>
         <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
         <symbol id="i-drive" viewBox="0 0 24 24"><line x1="22" y1="12" x2="2" y2="12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" y1="16" x2="6.01" y2="16"/><line x1="10" y1="16" x2="10.01" y2="16"/></symbol>
+        <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol>
+        <symbol id="i-filter" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></symbol>
+        <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+        <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></symbol>
+        <symbol id="i-file" viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></symbol>
+        <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+        <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol>
+        <symbol id="i-trash" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+        <symbol id="i-diff" viewBox="0 0 24 24"><line x1="12" y1="3" x2="12" y2="21"/><polyline points="5 8 12 3 19 8"/><polyline points="19 16 12 21 5 16"/></symbol>
+        <symbol id="i-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></symbol>
         <symbol id="i-logo" viewBox="0 0 24 24"><rect x="3" y="3" width="10" height="12" rx="1.5"/><rect x="15" y="3" width="6" height="7" rx="1.5"/><rect x="15" y="12" width="6" height="9" rx="1.5"/><rect x="3" y="17" width="10" height="4" rx="1.5"/></symbol>
     </defs>
 </svg>
@@ -86,9 +96,23 @@
             <button id="btn-free-space" class="btn btn-toggle" title="Show free space proportionally" disabled>
                 <svg class="icon"><use href="#i-pie"/></svg><span>Free space</span>
             </button>
+            <span class="sep"></span>
+            <label class="field search-field" title="Search names in the current folder (/)">
+                <svg class="icon"><use href="#i-search"/></svg>
+                <input type="search" id="search-input" placeholder="Search…" autocomplete="off" disabled>
+            </label>
+            <button id="btn-filter" class="btn btn-toggle" title="Filter by extension, size, age" disabled>
+                <svg class="icon"><use href="#i-filter"/></svg><span>Filter</span><span class="badge" id="filter-badge" hidden></span>
+            </button>
+            <button id="btn-scans" class="btn" title="Previous scans and compare">
+                <svg class="icon"><use href="#i-clock"/></svg><span>Scans</span>
+            </button>
         </div>
 
         <div class="topbar-right">
+            <button id="btn-panel" class="btn btn-icon btn-toggle active" title="Toggle details panel">
+                <svg class="icon"><use href="#i-panel"/></svg>
+            </button>
             <button id="btn-theme" class="btn btn-icon" title="Toggle light / dark theme">
                 <svg class="icon only-dark"><use href="#i-sun"/></svg>
                 <svg class="icon only-light"><use href="#i-moon"/></svg>
@@ -112,16 +136,42 @@
 
     <nav id="breadcrumb" class="breadcrumb" aria-label="Path"></nav>
 
-    <main id="treemap-container">
-        <div id="empty-state" class="empty-state">
-            <svg class="icon icon-xl"><use href="#i-drive"/></svg>
-            <h2>No scan yet</h2>
-            <p class="muted">Pick a drive or partition and SpaceMonger will map where your space goes.</p>
-            <button id="btn-open-empty" class="btn btn-primary">
-                <svg class="icon"><use href="#i-folder"/></svg><span>Choose a drive</span>
-            </button>
-        </div>
-    </main>
+    <div id="workspace">
+        <main id="treemap-container">
+            <div id="empty-state" class="empty-state">
+                <svg class="icon icon-xl"><use href="#i-drive"/></svg>
+                <h2>No scan yet</h2>
+                <p class="muted">Pick a drive or partition and SpaceMonger will map where your space goes.</p>
+                <button id="btn-open-empty" class="btn btn-primary">
+                    <svg class="icon"><use href="#i-folder"/></svg><span>Choose a drive</span>
+                </button>
+            </div>
+        </main>
+
+        <aside id="side-panel" class="side-panel">
+            <div class="panel-head">
+                <div class="panel-title-row">
+                    <svg class="icon" id="panel-icon"><use href="#i-folder"/></svg>
+                    <div class="panel-name" id="panel-name">—</div>
+                </div>
+                <div class="panel-path mono" id="panel-path" title="Full path"></div>
+                <div class="panel-meta" id="panel-meta"></div>
+                <div class="panel-actions">
+                    <button class="btn btn-icon btn-ghost" id="btn-copy-path" title="Copy path"><svg class="icon"><use href="#i-copy"/></svg></button>
+                    <button class="btn btn-icon btn-ghost" id="btn-export-csv" title="Export as CSV"><svg class="icon"><use href="#i-download"/></svg></button>
+                    <button class="btn btn-ghost btn-small" id="btn-export-json" title="Export as JSON">JSON</button>
+                    <span class="spacer"></span>
+                    <button class="btn btn-icon btn-ghost btn-danger" id="btn-delete" title="Delete from disk (Del)" hidden><svg class="icon"><use href="#i-trash"/></svg></button>
+                </div>
+            </div>
+            <div class="tabs" role="tablist">
+                <button class="tab active" data-tab="contents">Contents</button>
+                <button class="tab" data-tab="largest">Largest files</button>
+                <button class="tab" data-tab="search" id="tab-search" hidden>Results</button>
+            </div>
+            <div class="panel-list" id="panel-list"></div>
+        </aside>
+    </div>
 
     <footer id="statusbar" class="statusbar">
         <span class="stat"><b id="status-files">—</b> files</span>
@@ -131,6 +181,7 @@
             <b id="usage-pct">—</b> used
             <span class="muted">· <b id="status-free">—</b> free of <b id="status-total">—</b></span>
         </span>
+        <span class="stat" id="status-filter" hidden></span>
         <span class="spacer"></span>
         <span class="stat stat-selected" id="status-selected"></span>
         <span class="stat muted" id="status-scan" hidden></span>
@@ -195,6 +246,8 @@
                 <span><kbd>Backspace</kbd> up</span>
                 <span><kbd>Home</kbd> root</span>
                 <span><kbd>R</kbd> reload</span>
+                <span><kbd>/</kbd> search</span>
+                <span><kbd>Del</kbd> delete</span>
                 <span><kbd>Esc</kbd> deselect</span>
             </div>
             <div class="card-actions">
@@ -204,9 +257,112 @@
     </div>
 </div>
 
+<!-- ─── Filter popover ────────────────────────────────────────────────────── -->
+<div id="filter-popover" class="popover" hidden>
+    <div class="popover-title">Filter</div>
+    <label class="form-row">
+        <span>Extensions</span>
+        <input type="text" id="filter-ext" placeholder="e.g. log, iso, mp4" autocomplete="off">
+    </label>
+    <label class="form-row">
+        <span>Min size</span>
+        <span class="inline">
+            <input type="number" id="filter-min" min="0" step="1" placeholder="0">
+            <select id="filter-min-unit">
+                <option value="1048576" selected>MB</option>
+                <option value="1073741824">GB</option>
+                <option value="1024">KB</option>
+            </select>
+        </span>
+    </label>
+    <label class="form-row">
+        <span>Modified</span>
+        <select id="filter-age">
+            <option value="any" selected>Any time</option>
+            <option value="7">Last 7 days</option>
+            <option value="30">Last 30 days</option>
+            <option value="365">Last year</option>
+            <option value="-365">Older than a year</option>
+            <option value="-1095">Older than 3 years</option>
+        </select>
+    </label>
+    <label class="form-row check">
+        <input type="checkbox" id="filter-hide">
+        <span>Hide non-matching (re-layout)</span>
+    </label>
+    <div class="card-actions">
+        <button class="btn" id="filter-clear">Clear</button>
+        <button class="btn btn-primary" id="filter-apply">Apply</button>
+    </div>
+</div>
+
+<!-- ─── Scans dropdown ────────────────────────────────────────────────────── -->
+<div id="scans-popover" class="popover scans-popover" hidden>
+    <div class="popover-title">Previous scans <span class="muted" id="scans-hint"></span></div>
+    <div id="scans-list" class="scans-list"></div>
+</div>
+
+<!-- ─── Compare modal ─────────────────────────────────────────────────────── -->
+<div id="compare-modal" class="screen overlay modal" hidden>
+    <div class="card modal-card compare-card">
+        <div class="modal-header">
+            <h3>Compare scans</h3>
+            <button class="btn btn-icon btn-ghost" data-close="compare-modal" title="Close">
+                <svg class="icon"><use href="#i-x"/></svg>
+            </button>
+        </div>
+        <div class="compare-summary" id="compare-summary"></div>
+        <div class="compare-toolbar">
+            <div class="seg">
+                <button class="seg-btn active" data-cmp="all">All</button>
+                <button class="seg-btn" data-cmp="grew">Grew</button>
+                <button class="seg-btn" data-cmp="shrunk">Shrunk</button>
+            </div>
+            <span class="muted" id="compare-count"></span>
+        </div>
+        <div class="modal-body compare-body" id="compare-list"></div>
+    </div>
+</div>
+
+<!-- ─── Delete confirm modal ──────────────────────────────────────────────── -->
+<div id="delete-modal" class="screen overlay modal" hidden>
+    <div class="card modal-card delete-card">
+        <div class="modal-header">
+            <h3>Delete permanently?</h3>
+            <button class="btn btn-icon btn-ghost" data-close="delete-modal" title="Close">
+                <svg class="icon"><use href="#i-x"/></svg>
+            </button>
+        </div>
+        <div class="delete-body">
+            <p>This removes the item from disk immediately. There is no undo.</p>
+            <div class="delete-target mono" id="delete-path"></div>
+            <div class="muted" id="delete-meta"></div>
+            <label class="form-row check">
+                <input type="checkbox" id="delete-confirm-check">
+                <span>I understand this cannot be undone</span>
+            </label>
+            <div class="card-actions">
+                <button class="btn" data-close="delete-modal">Cancel</button>
+                <button class="btn btn-danger-solid" id="delete-confirm-btn" disabled>
+                    <svg class="icon"><use href="#i-trash"/></svg><span>Delete</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div id="toasts" class="toasts" aria-live="polite"></div>
 
 <script src="d3.v7.min.js"></script>
-<script src="app.js"></script>
+<script src="js/state.js"></script>
+<script src="js/util.js"></script>
+<script src="js/api.js"></script>
+<script src="js/treemap.js"></script>
+<script src="js/filters.js"></script>
+<script src="js/panel.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/scan.js"></script>
+<script src="js/history.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>

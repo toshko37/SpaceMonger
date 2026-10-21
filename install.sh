@@ -121,7 +121,12 @@ if [ ! -f "$INSTALL_DIR/settings.json" ]; then
   "auth": {
     "enabled": true,
     "password": "${NEW_PASSWORD}"
-  }
+  },
+  "tls": { "cert": "", "key": "" },
+  "exclude": [],
+  "scanWorkers": 0,
+  "historySize": 5,
+  "allowDelete": false
 }
 SETTINGS
     chmod 600 "$INSTALL_DIR/settings.json"

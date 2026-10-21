@@ -28,7 +28,7 @@ func TestCompareTrees(t *testing.T) {
 	for _, c := range changes {
 		byPath[c.Path] = c
 	}
-	if byPath["new"].Delta != 40 || byPath["grew"].Delta != 10 || byPath["gone"].Delta != -10 {
+	if byPath["new"].Delta != 40 || !byPath["new"].Added || byPath["grew"].Delta != 10 || byPath["gone"].Delta != -10 || !byPath["gone"].Gone {
 		t.Errorf("unexpected changes %+v", changes)
 	}
 	if _, ok := byPath["gone/inner"]; ok {

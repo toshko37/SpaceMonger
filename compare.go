@@ -11,6 +11,8 @@ type Change struct {
 	Before int64  `json:"before"`
 	After  int64  `json:"after"`
 	Delta  int64  `json:"delta"`
+	Added  bool   `json:"added,omitempty"` // only in the newer scan
+	Gone   bool   `json:"gone,omitempty"`  // only in the older scan
 }
 
 type CompareSummary struct {
@@ -46,7 +48,7 @@ func compareTrees(a, b *FileNode, limit int) ([]Change, CompareSummary) {
 		switch {
 		case !existed:
 			sum.Added++
-			changes = append(changes, Change{Path: rel, IsDir: n.IsDir, After: n.Size, Delta: n.Size})
+			changes = append(changes, Change{Path: rel, IsDir: n.IsDir, After: n.Size, Delta: n.Size, Added: true})
 			return // children of a new node are implied
 		case old.Size != n.Size:
 			sum.Changed++
@@ -67,7 +69,7 @@ func compareTrees(a, b *FileNode, limit int) ([]Change, CompareSummary) {
 			continue
 		}
 		sum.Removed++
-		changes = append(changes, Change{Path: rel, IsDir: n.IsDir, Before: n.Size, Delta: -n.Size})
+		changes = append(changes, Change{Path: rel, IsDir: n.IsDir, Before: n.Size, Delta: -n.Size, Gone: true})
 	}
 
 	sort.Slice(changes, func(i, j int) bool {

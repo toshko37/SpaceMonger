@@ -4,5 +4,13 @@
   "auth": {
     "enabled": true,
     "password": "changeme"
-  }
+  },
+  "tls": {
+    "cert": "",
+    "key": ""
+  },
+  "exclude": ["/var/lib/docker", "node_modules", "*.tmp"],
+  "scanWorkers": 0,
+  "historySize": 5,
+  "allowDelete": false
 }
