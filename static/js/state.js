@@ -9,6 +9,7 @@ const state = {
     selected:     null,   // selected FileNode (data node)
     selectedRel:  '',     // its path relative to the scan root
     freeSpace:    false,
+    colorMode:    'classic', // classic | type | age (see colors.js)
     authRequired: false,
     config:       { allowDelete: false, historySize: 5 },
     evtSource:    null,   // active EventSource during a scan

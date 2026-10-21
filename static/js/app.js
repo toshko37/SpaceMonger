@@ -5,6 +5,8 @@ function toggleTheme() {
     const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
     document.documentElement.dataset.theme = next;
     try { localStorage.setItem('sm-theme', next); } catch (e) {}
+    // Type and age palettes are stepped per theme.
+    if (state.current && state.colorMode !== 'classic') renderTreemap();
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
@@ -121,6 +123,7 @@ function bindEvents() {
         if (state.current) renderTreemap();
     });
     $('btn-theme').addEventListener('click', toggleTheme);
+    $('color-mode').addEventListener('change', e => setColorMode(e.target.value));
     $('btn-panel').addEventListener('click', togglePanel);
     $('btn-about').addEventListener('click', () => { closePopovers(); $('about-modal').hidden = false; });
     $('btn-logout').addEventListener('click', doLogout);
@@ -169,6 +172,7 @@ function bindEvents() {
 async function init() {
     initTooltip();
     bindEvents();
+    loadColorMode();
 
     try {
         if (localStorage.getItem('sm-panel') === '0') {

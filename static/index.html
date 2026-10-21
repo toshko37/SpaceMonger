@@ -96,6 +96,13 @@
             <button id="btn-free-space" class="btn btn-toggle" title="Show free space proportionally" disabled>
                 <svg class="icon"><use href="#i-pie"/></svg><span>Free space</span>
             </button>
+            <label class="select-field" title="What the colours show">
+                <select id="color-mode" class="btn" disabled>
+                    <option value="classic">Classic</option>
+                    <option value="type">By type</option>
+                    <option value="age">By age</option>
+                </select>
+            </label>
             <span class="sep"></span>
             <label class="field search-field" title="Search names in the current folder (/)">
                 <svg class="icon"><use href="#i-search"/></svg>
@@ -138,6 +145,7 @@
 
     <div id="workspace">
         <main id="treemap-container">
+            <div id="legend" class="legend" hidden></div>
             <div id="empty-state" class="empty-state">
                 <svg class="icon icon-xl"><use href="#i-drive"/></svg>
                 <h2>No scan yet</h2>
@@ -357,6 +365,7 @@
 <script src="js/state.js"></script>
 <script src="js/util.js"></script>
 <script src="js/api.js"></script>
+<script src="js/colors.js"></script>
 <script src="js/treemap.js"></script>
 <script src="js/filters.js"></script>
 <script src="js/panel.js"></script>

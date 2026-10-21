@@ -10,7 +10,11 @@ Inspired by the classic SpaceMonger for Windows.
 
 ## Features
 
-- Squarified treemap with depth-based colours; single-click selects, double-click zooms in
+- Squarified treemap in the classic SpaceMonger style: the original 16-colour palette by
+  depth, touching tiles with thin outlines, folder header strips, and name / exact size in
+  bytes / date in every file cell that has room; single-click selects, double-click zooms in
+- **Colour modes**: *Classic* (by depth), *By type* (media, archives & disk images, logs &
+  databases) and *By age* (older files stronger), with a legend
 - **Details panel**: contents of the current folder sorted by size, the largest files
   anywhere below it, full path with copy button
 - **Search** by name and **filters** by extension, minimum size and age; matches are
@@ -115,6 +119,7 @@ immediate and permanent: there is no trash.
 | **In**          | Zoom into the selected folder (`Enter`)           |
 | **Up**          | One level up (`Backspace` / `←`)                  |
 | **Free space**  | Show free space next to the treemap               |
+| Colour menu     | Classic / By type / By age (remembered per browser) |
 | **Search**      | Highlight names matching the text (`/` to focus)  |
 | **Filter**      | Extension, minimum size, modification age; optionally hide non-matching |
 | **Scans**       | Previous scans: load, compare with the current one, forget |
@@ -171,7 +176,7 @@ export.go     CSV / JSON export
 stream.go     allocation-free JSON writer for large trees
 idle.go       idle release and memory trimming
 handlers.go   HTTP / SSE handlers, gzip
-static/js/    UI modules (state, treemap, nav, panel, filters, scan, history, app)
+static/js/    UI modules (state, colors, treemap, nav, panel, filters, scan, history, app)
 ```
 
 ## Releasing

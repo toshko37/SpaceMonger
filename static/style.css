@@ -22,8 +22,6 @@
     --warn-border: #5a4a14;
     --warn-text: #fbbf24;
     --treemap-bg: #0b0d11;
-    --cell-text: #0b0d11;
-    --dir-alpha: .42;
     --shadow: 0 12px 40px rgba(0, 0, 0, .55);
     --overlay: rgba(5, 7, 10, .6);
 }
@@ -44,8 +42,6 @@
     --warn-border: #f1d27a;
     --warn-text: #7a5a00;
     --treemap-bg: #ffffff;
-    --cell-text: #111827;
-    --dir-alpha: .55;
     --shadow: 0 12px 40px rgba(20, 30, 60, .18);
     --overlay: rgba(20, 24, 32, .45);
 }
@@ -230,21 +226,50 @@ kbd {
 #treemap-container > svg { animation: fade-in .18s ease-out; }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 
-.cell rect {
-    transition: filter .1s;
-    cursor: default;
-}
+.cell rect { cursor: default; }
 .cell.dir rect { cursor: pointer; }
-.cell:hover rect { filter: brightness(1.1) saturate(1.08); }
-.cell text {
-    font-family: var(--font);
+.cell:hover rect { filter: brightness(1.06); }
+.cell text { pointer-events: none; user-select: none; }
+
+.legend {
+    position: absolute;
+    left: 10px;
+    bottom: 10px;
+    z-index: 5;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    color: var(--text);
+    font-size: 12px;
     pointer-events: none;
-    user-select: none;
-    fill: var(--cell-text);
 }
-.cell text.name { font-size: 11.5px; font-weight: 600; }
-.cell.dir text.name { fill: var(--text); }
-.cell text.size { font-size: 10.5px; opacity: .72; }
+.legend i {
+    display: inline-block;
+    width: 11px; height: 11px;
+    margin-right: 6px;
+    border: 1px solid var(--border);
+    vertical-align: -1px;
+}
+
+.select-field { position: relative; display: inline-flex; }
+.select-field select { appearance: none; -webkit-appearance: none; padding-right: 26px; }
+.select-field::after {
+    content: "";
+    position: absolute;
+    right: 11px;
+    top: 12px;
+    width: 6px; height: 6px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: rotate(45deg);
+    pointer-events: none;
+    color: var(--text-muted);
+}
 
 .empty-state {
     position: absolute;
@@ -593,7 +618,7 @@ kbd {
 
 .cell.dim rect { opacity: .14; }
 .cell.dim text { opacity: .25; }
-.cell.hit rect { stroke: var(--text); stroke-width: 1.2; }
+.cell.hit rect { stroke: #000; stroke-width: 2; }
 
 .popover {
     position: fixed;

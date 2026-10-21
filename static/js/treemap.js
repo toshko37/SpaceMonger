@@ -1,18 +1,5 @@
 'use strict';
 
-// ─── Depth palette ────────────────────────────────────────────────────────────
-// Colour is a function of absolute depth in the scanned tree, so a folder
-// keeps its colour when you zoom in and out.
-const DEPTH_COLORS = [
-    '#f87171', '#fb923c', '#facc15', '#4ade80', '#2dd4bf', '#38bdf8',
-    '#818cf8', '#c084fc', '#f472b6', '#a3e635', '#fbbf24', '#34d399',
-];
-
-function cellColor(d) {
-    const abs = (state.navStack.length - 1) + d.depth; // depth 1 == child of view root
-    return DEPTH_COLORS[(abs - 1) % DEPTH_COLORS.length];
-}
-
 // ─── Tooltip ──────────────────────────────────────────────────────────────────
 let tooltipEl = null;
 
@@ -60,9 +47,38 @@ function fitText(el, maxWidth) {
 }
 
 // ─── Rendering ────────────────────────────────────────────────────────────────
+// Classic SpaceMonger geometry: tiles touch, each outlined by a 1px darker
+// shade of its own fill, square corners, a header strip with the folder
+// name, and a centred name / exact size / date block in file cells.
 const MAX_NODES = 3000;
-const HEADER_H  = 20;
+const HEADER_H  = 13;
+const CELL_FONT = "Tahoma, Verdana, 'DejaVu Sans', 'Segoe UI', sans-serif";
+const MONTHS    = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 let clickTimer  = null;
+
+function classicDate(unixSec) {
+    const d = new Date(unixSec * 1000), p = n => String(n).padStart(2, '0');
+    return `${p(d.getDate())} ${MONTHS[d.getMonth()]} ${d.getFullYear()}  ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+const outlineCache = new Map();
+function outlineFor(fill) {
+    let o = outlineCache.get(fill);
+    if (!o) { o = d3.color(fill).darker(1.6).formatHex(); outlineCache.set(fill, o); }
+    return o;
+}
+
+// Widest glyph advance of the cell font at 10-10.5px is ~6.5px; text that
+// fits by that estimate skips the (layout-forcing) measurement.
+const MAX_CHAR_W = 6.5;
+
+function addText(g, x, y, anchor, size, color, text, maxWidth) {
+    const t = g.append('text')
+        .attr('x', x).attr('y', y).attr('text-anchor', anchor)
+        .attr('font-size', size).attr('fill', color)
+        .text(text).node();
+    if (text.length * MAX_CHAR_W > maxWidth) fitText(t, maxWidth);
+}
 
 function renderTreemap() {
     const node = state.current;
@@ -70,6 +86,7 @@ function renderTreemap() {
     container.querySelectorAll(':scope > svg, :scope > .free-space-panel').forEach(e => e.remove());
     $('empty-state').hidden = !!node;
     state.renderIndex = new Map();
+    renderLegend();
     if (!node) { updateFilterStatus(0, 0); return; }
 
     const W = container.clientWidth, H = container.clientHeight;
@@ -93,6 +110,8 @@ function renderTreemap() {
     const svgEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svgEl.setAttribute('width', svgW);
     svgEl.setAttribute('height', H);
+    svgEl.setAttribute('shape-rendering', 'crispEdges');
+    svgEl.setAttribute('font-family', CELL_FONT);
     svgEl.style.cssText = `position:absolute;left:${svgX}px;top:0;`;
     container.appendChild(svgEl);
 
@@ -115,14 +134,14 @@ function renderTreemap() {
         .sort((a, b) => b.value - a.value);
 
     d3.treemap()
-        .tile(d3.treemapSquarify.ratio(1.2))
+        .tile(d3.treemapSquarify)
         .size([svgW, H])
-        .paddingOuter(3)
+        .paddingOuter(2)
         .paddingTop(HEADER_H)
-        .paddingInner(2)
+        .paddingInner(0)
         .round(true)(root);
 
-    let threshold = 3, nodes;
+    let threshold = 2, nodes;
     do {
         nodes = root.descendants().filter(d =>
             d.depth > 0 && d.value > 0 && (d.x1 - d.x0) >= threshold && (d.y1 - d.y0) >= threshold);
@@ -132,6 +151,7 @@ function renderTreemap() {
     nodes.forEach(d => state.renderIndex.set(d.data, d));
     updateFilterStatus(matchCount, matchSize);
 
+    const baseDepth = state.navStack.length - 1;
     const viewTotal = root.value;
     const cell = d3.select(svgEl).selectAll('g.cell')
         .data(nodes)
@@ -145,14 +165,16 @@ function renderTreemap() {
             }
             return c;
         })
-        .attr('transform', d => `translate(${d.x0},${d.y0})`);
+        .attr('transform', d => `translate(${d.x0},${d.y0})`)
+        .each(function (d) { d._fill = fillFor(d, baseDepth + d.depth); });
 
     cell.append('rect')
-        .attr('width',  d => Math.max(0, d.x1 - d.x0))
-        .attr('height', d => Math.max(0, d.y1 - d.y0))
-        .attr('rx', 3)
-        .attr('fill', d => cellColor(d))
-        .style('fill-opacity', d => d.children ? 'var(--dir-alpha)' : 1)
+        .attr('x', 0.5).attr('y', 0.5)
+        .attr('width',  d => Math.max(0, d.x1 - d.x0 - 1))
+        .attr('height', d => Math.max(0, d.y1 - d.y0 - 1))
+        .attr('fill', d => d._fill)
+        .attr('stroke', d => outlineFor(d._fill))
+        .attr('stroke-width', 1)
         .on('click', (ev, d) => {
             ev.stopPropagation();
             clearTimeout(clickTimer);
@@ -171,19 +193,22 @@ function renderTreemap() {
         .on('mousemove', moveTooltip)
         .on('mouseout', hideTooltip);
 
-    cell.filter(d => (d.x1 - d.x0) >= 24 && (d.y1 - d.y0) >= 15)
-        .append('text')
-        .attr('class', 'name')
-        .attr('x', 5).attr('y', 14)
-        .text(d => d.data.n)
-        .each(function (d) { fitText(this, d.x1 - d.x0 - 10); });
+    // Folder header strip: name, left aligned.
+    cell.filter(d => d.children && (d.x1 - d.x0) >= 20)
+        .each(function (d) {
+            addText(d3.select(this), 3, 10, 'start', '10.5px', textFor(d._fill), d.data.n, d.x1 - d.x0 - 6);
+        });
 
-    cell.filter(d => !d.children && (d.x1 - d.x0) >= 48 && (d.y1 - d.y0) >= 30)
-        .append('text')
-        .attr('class', 'size')
-        .attr('x', 5).attr('y', 27)
-        .text(d => formatSize(d.value))
-        .each(function (d) { fitText(this, d.x1 - d.x0 - 10); });
+    // Files: centred name, exact size in bytes and modification date.
+    cell.filter(d => !d.children && (d.x1 - d.x0) >= 22 && (d.y1 - d.y0) >= 13)
+        .each(function (d) {
+            const w = d.x1 - d.x0, h = d.y1 - d.y0, g = d3.select(this), color = textFor(d._fill);
+            const lines = [d.data.n];
+            if (w >= 70 && h >= 36) lines.push(d.data.s.toLocaleString('en-US') + ' bytes');
+            if (w >= 70 && h >= 48) lines.push(classicDate(d.data.m));
+            const lh = 11.5, y0 = h / 2 - (lines.length - 1) * lh / 2 + 3.5;
+            lines.forEach((l, i) => addText(g, w / 2, y0 + i * lh, 'middle', '10px', color, l, w - 6));
+        });
 
     svgEl.addEventListener('click', () => selectNode(null, ''));
     applySelectionStyle();
@@ -224,9 +249,10 @@ function selectNode(node, rel) {
     renderPanel();
 }
 
+// The selected cell gets a 2px black frame, as in the original.
 function applySelectionStyle() {
     const sel = state.selected;
     d3.selectAll('.cell rect')
-        .attr('stroke', d => d.data === sel ? 'var(--text)' : null)
-        .attr('stroke-width', d => d.data === sel ? 2 : null);
+        .attr('stroke', d => d.data === sel ? '#000' : outlineFor(d._fill))
+        .attr('stroke-width', d => d.data === sel ? 2.5 : 1);
 }

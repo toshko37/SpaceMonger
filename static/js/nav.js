@@ -154,6 +154,7 @@ function updateButtons() {
     $('btn-reload').disabled     = !has;
     $('btn-free-space').disabled = !has;
     $('btn-filter').disabled     = !has;
+    $('color-mode').disabled     = !has;
     $('search-input').disabled   = !has;
     $('btn-zoom-out').disabled   = atRoot;
     $('btn-zoom-full').disabled  = atRoot;
