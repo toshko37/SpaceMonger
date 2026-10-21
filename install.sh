@@ -108,24 +108,30 @@ chmod +x "$INSTALL_DIR/uninstall.sh"
 info "Wrote uninstall script"
 
 # ─── Generate settings.json if missing ───────────────────────────────────────
+# Auth is ON by default: the server is reachable from the whole LAN and
+# exposes the full directory tree of every mounted filesystem.
+NEW_PASSWORD=""
 if [ ! -f "$INSTALL_DIR/settings.json" ]; then
-    PASSWORD=$(< /dev/urandom tr -dc 'a-z0-9' | head -c 6 || true)
-    [ -z "$PASSWORD" ] && PASSWORD=$(date +%s | sha256sum | head -c 6)
+    NEW_PASSWORD=$(< /dev/urandom tr -dc 'a-km-np-z2-9' | head -c 10 || true)
+    [ -z "$NEW_PASSWORD" ] && NEW_PASSWORD=$(date +%s%N | sha256sum | head -c 10)
     cat > "$INSTALL_DIR/settings.json" <<SETTINGS
 {
   "port": 4322,
   "bind": "0.0.0.0",
   "auth": {
-    "enabled": false,
-    "password": "${PASSWORD}"
+    "enabled": true,
+    "password": "${NEW_PASSWORD}"
   }
 }
 SETTINGS
     chmod 600 "$INSTALL_DIR/settings.json"
-    info "Created settings.json (generated password: ${YELLOW}${PASSWORD}${NC})"
-    warn "Auth is disabled by default. Edit settings.json to enable."
+    info "Created settings.json with authentication enabled"
 else
     info "Using existing settings.json"
+    if grep -q '"enabled": *false' "$INSTALL_DIR/settings.json"; then
+        warn "Authentication is DISABLED in settings.json — anyone on the network can browse your files."
+        warn "Set \"enabled\": true and restart: systemctl restart $SERVICE_NAME"
+    fi
 fi
 
 # ─── Install systemd service ──────────────────────────────────────────────────
@@ -165,9 +171,13 @@ echo -e "${GREEN}╚════════════════════
 echo ""
 echo -e "  Local:    ${GREEN}http://localhost:4322${NC}"
 echo -e "  Network:  ${GREEN}http://${LOCAL_IP}:4322${NC}"
+if [ -n "$NEW_PASSWORD" ]; then
+    echo ""
+    echo -e "  Login password:  ${YELLOW}${NEW_PASSWORD}${NC}"
+    echo "  (stored in $INSTALL_DIR/settings.json — change it there if you like)"
+fi
 echo ""
-echo "  Config:   $INSTALL_DIR/settings.json"
-echo "  Auth:     edit settings.json, then: systemctl restart $SERVICE_NAME"
+echo "  Config:   $INSTALL_DIR/settings.json  (restart after changes)"
 echo ""
 echo "  Commands:"
 echo "    Status:  systemctl status $SERVICE_NAME"

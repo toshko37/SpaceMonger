@@ -1,113 +1,210 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark light">
     <title>SpaceMonger</title>
     <link rel="stylesheet" href="style.css">
+    <script>
+        // Apply the saved theme before first paint to avoid a flash.
+        (function () {
+            try {
+                var t = localStorage.getItem('sm-theme');
+                if (!t) t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+                document.documentElement.dataset.theme = t;
+            } catch (e) {}
+        })();
+    </script>
 </head>
 <body>
 
-<!-- ─── Login overlay (shown when auth.enabled=true) ─────────────────────── -->
-<div id="login-overlay">
-    <div class="login-box">
-        <h2>SpaceMonger</h2>
-        <input type="password" id="login-password"
-               placeholder="Enter password" autocomplete="current-password">
-        <button id="login-btn">Login</button>
-        <div id="login-error" class="login-error"></div>
-    </div>
+<!-- ─── Icon sprite (Feather-style, stroke icons) ─────────────────────────── -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+    <defs>
+        <symbol id="i-folder" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></symbol>
+        <symbol id="i-refresh" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></symbol>
+        <symbol id="i-full" viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></symbol>
+        <symbol id="i-zoom-in" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></symbol>
+        <symbol id="i-up" viewBox="0 0 24 24"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></symbol>
+        <symbol id="i-pie" viewBox="0 0 24 24"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></symbol>
+        <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></symbol>
+        <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></symbol>
+        <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></symbol>
+        <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></symbol>
+        <symbol id="i-x" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+        <symbol id="i-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></symbol>
+        <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+        <symbol id="i-drive" viewBox="0 0 24 24"><line x1="22" y1="12" x2="2" y2="12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" y1="16" x2="6.01" y2="16"/><line x1="10" y1="16" x2="10.01" y2="16"/></symbol>
+        <symbol id="i-logo" viewBox="0 0 24 24"><rect x="3" y="3" width="10" height="12" rx="1.5"/><rect x="15" y="3" width="6" height="7" rx="1.5"/><rect x="15" y="12" width="6" height="9" rx="1.5"/><rect x="3" y="17" width="10" height="4" rx="1.5"/></symbol>
+    </defs>
+</svg>
+
+<!-- ─── Login screen (shown when auth is required) ─────────────────────────── -->
+<div id="login-overlay" class="screen" hidden>
+    <form class="card login-card" id="login-form" autocomplete="off">
+        <div class="login-logo"><svg class="icon icon-lg"><use href="#i-logo"/></svg></div>
+        <h1>SpaceMonger</h1>
+        <p class="muted">Enter the password from <code>settings.json</code> to continue.</p>
+        <label class="field">
+            <svg class="icon"><use href="#i-lock"/></svg>
+            <input type="password" id="login-password" placeholder="Password"
+                   autocomplete="current-password" autofocus>
+        </label>
+        <button type="submit" class="btn btn-primary btn-block" id="login-btn">Sign in</button>
+        <div id="login-error" class="form-error" role="alert"></div>
+    </form>
 </div>
 
 <!-- ─── Main application ──────────────────────────────────────────────────── -->
-<div id="app">
+<div id="app" hidden>
 
-    <!-- Title bar (Windows-style blue bar) -->
-    <div id="titlebar">SpaceMonger — Disk Space Analyzer</div>
+    <header class="topbar">
+        <div class="brand" title="SpaceMonger">
+            <svg class="icon"><use href="#i-logo"/></svg>
+            <span>SpaceMonger</span>
+        </div>
 
-    <!-- Toolbar -->
-    <div id="toolbar">
-        <button id="btn-open"       title="Open a drive or partition">&#128194; Open</button>
-        <button id="btn-reload"     title="Reload / rescan current path">&#8635; Reload</button>
-        <div class="toolbar-sep"></div>
-        <button id="btn-zoom-full"  title="Zoom to full view" disabled>&#8862; Full</button>
-        <button id="btn-zoom-in"    title="Zoom into selected folder" disabled>&#43; In</button>
-        <button id="btn-zoom-out"   title="Zoom out one level" disabled>&#8722; Out</button>
-        <button id="btn-free-space" title="Show free space proportionally">Free Space</button>
-        <div class="toolbar-spacer"></div>
-        <button id="btn-about"      title="About SpaceMonger">About</button>
-    </div>
+        <div class="toolbar" role="toolbar">
+            <button id="btn-open" class="btn btn-primary" title="Choose a drive or partition to scan">
+                <svg class="icon"><use href="#i-folder"/></svg><span>Open</span>
+            </button>
+            <button id="btn-reload" class="btn" title="Rescan the current path (R)" disabled>
+                <svg class="icon"><use href="#i-refresh"/></svg><span>Reload</span>
+            </button>
+            <span class="sep"></span>
+            <button id="btn-zoom-full" class="btn" title="Back to scan root (Home)" disabled>
+                <svg class="icon"><use href="#i-full"/></svg><span>Full</span>
+            </button>
+            <button id="btn-zoom-in" class="btn" title="Zoom into the selected folder (Enter)" disabled>
+                <svg class="icon"><use href="#i-zoom-in"/></svg><span>In</span>
+            </button>
+            <button id="btn-zoom-out" class="btn" title="Go up one level (Backspace)" disabled>
+                <svg class="icon"><use href="#i-up"/></svg><span>Up</span>
+            </button>
+            <span class="sep"></span>
+            <button id="btn-free-space" class="btn btn-toggle" title="Show free space proportionally" disabled>
+                <svg class="icon"><use href="#i-pie"/></svg><span>Free space</span>
+            </button>
+        </div>
 
-    <!-- Info bar: compression / sparse file notice (hidden until relevant) -->
-    <div id="info-bar">
+        <div class="topbar-right">
+            <button id="btn-theme" class="btn btn-icon" title="Toggle light / dark theme">
+                <svg class="icon only-dark"><use href="#i-sun"/></svg>
+                <svg class="icon only-light"><use href="#i-moon"/></svg>
+            </button>
+            <button id="btn-about" class="btn btn-icon" title="About SpaceMonger">
+                <svg class="icon"><use href="#i-info"/></svg>
+            </button>
+            <button id="btn-logout" class="btn btn-icon" title="Sign out" hidden>
+                <svg class="icon"><use href="#i-logout"/></svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- Info bar: compression / sparse notice -->
+    <div id="info-bar" class="info-bar" hidden>
         <span id="info-bar-text"></span>
-        <button id="info-bar-close" title="Dismiss">&#10005;</button>
+        <button id="info-bar-close" class="btn btn-icon btn-ghost" title="Dismiss">
+            <svg class="icon"><use href="#i-x"/></svg>
+        </button>
     </div>
 
-    <!-- Breadcrumb navigation -->
-    <div id="breadcrumb"></div>
+    <nav id="breadcrumb" class="breadcrumb" aria-label="Path"></nav>
 
-    <!-- Treemap drawing area -->
-    <div id="treemap-container"></div>
+    <main id="treemap-container">
+        <div id="empty-state" class="empty-state">
+            <svg class="icon icon-xl"><use href="#i-drive"/></svg>
+            <h2>No scan yet</h2>
+            <p class="muted">Pick a drive or partition and SpaceMonger will map where your space goes.</p>
+            <button id="btn-open-empty" class="btn btn-primary">
+                <svg class="icon"><use href="#i-folder"/></svg><span>Choose a drive</span>
+            </button>
+        </div>
+    </main>
 
-    <!-- Status bar -->
-    <div id="statusbar">
-        <span>Files: <span id="status-files">—</span></span>
-        <span>Dirs: <span id="status-dirs">—</span></span>
-        <span id="status-space" style="display:none">
-            Used: <span id="status-used">—</span>
-            &nbsp;|&nbsp;
-            Free: <span id="status-free">—</span>
+    <footer id="statusbar" class="statusbar">
+        <span class="stat"><b id="status-files">—</b> files</span>
+        <span class="stat"><b id="status-dirs">—</b> folders</span>
+        <span class="stat" id="status-space" hidden>
+            <span class="usage"><span class="usage-fill" id="usage-fill"></span></span>
+            <b id="usage-pct">—</b> used
+            <span class="muted">· <b id="status-free">—</b> free of <b id="status-total">—</b></span>
         </span>
-    </div>
+        <span class="spacer"></span>
+        <span class="stat stat-selected" id="status-selected"></span>
+        <span class="stat muted" id="status-scan" hidden></span>
+    </footer>
 
 </div>
 
 <!-- ─── Scan progress overlay ─────────────────────────────────────────────── -->
-<div id="progress-overlay">
-    <div class="progress-box">
-        <h3 id="progress-title">Scanning filesystem...</h3>
-        <p id="progress-counts">
-            Files: <span id="progress-files">0</span>
-            &nbsp;&nbsp;
-            Folders: <span id="progress-dirs">0</span>
-        </p>
-        <p class="progress-path" id="progress-current"></p>
+<div id="progress-overlay" class="screen overlay" hidden>
+    <div class="card progress-card">
+        <div class="progress-head">
+            <span class="spinner"></span>
+            <h3 id="progress-title">Scanning…</h3>
+        </div>
+        <div class="progress-bar"><span></span></div>
+        <div class="progress-counts" id="progress-counts">
+            <span><b id="progress-files">0</b> files</span>
+            <span><b id="progress-dirs">0</b> folders</span>
+        </div>
+        <div class="progress-path mono" id="progress-current"></div>
+        <div class="card-actions">
+            <button id="btn-cancel-scan" class="btn">Cancel</button>
+        </div>
     </div>
 </div>
 
 <!-- ─── Open drive modal ──────────────────────────────────────────────────── -->
-<div id="open-modal" class="modal-overlay">
-    <div class="modal-box">
+<div id="open-modal" class="screen overlay modal" hidden>
+    <div class="card modal-card">
         <div class="modal-header">
-            <h3>Select Drive or Partition</h3>
-            <button id="close-open-modal">&#10005;</button>
+            <h3>Select a drive or partition</h3>
+            <button class="btn btn-icon btn-ghost" data-close="open-modal" title="Close">
+                <svg class="icon"><use href="#i-x"/></svg>
+            </button>
         </div>
         <div class="modal-body" id="mounts-list"></div>
     </div>
 </div>
 
-<!-- ─── About modal ────────────────────────────────────────────────────────── -->
-<div id="about-modal" class="modal-overlay">
-    <div class="modal-box about-box">
+<!-- ─── About modal ───────────────────────────────────────────────────────── -->
+<div id="about-modal" class="screen overlay modal" hidden>
+    <div class="card modal-card about-card">
         <div class="modal-header">
-            <h3>About SpaceMonger</h3>
-            <button id="close-about-modal">&#10005;</button>
+            <h3>About</h3>
+            <button class="btn btn-icon btn-ghost" data-close="about-modal" title="Close">
+                <svg class="icon"><use href="#i-x"/></svg>
+            </button>
         </div>
         <div class="about-body">
-            <div class="about-logo">SpaceMonger</div>
-            <div class="about-sub">Disk Space Analyzer for Linux</div>
-            <table class="about-table">
-                <tr><td>Version</td><td id="about-version">—</td></tr>
-                <tr><td>Created&nbsp;by</td><td>Todor Karachorbadzhiev</td></tr>
-                <tr><td>Contact</td><td><a href="mailto:app@techbg.net">app@techbg.net</a></td></tr>
-                <tr><td>Year</td><td>2026</td></tr>
-                <tr><td>Source</td><td><a id="about-github-link" href="https://github.com/toshko37/SpaceMonger" target="_blank">github.com/toshko37/SpaceMonger</a></td></tr>
-            </table>
-            <button class="about-ok-btn" id="about-ok-btn">OK</button>
+            <svg class="icon icon-lg accent"><use href="#i-logo"/></svg>
+            <div class="about-title">SpaceMonger</div>
+            <div class="muted">Disk space analyzer for Linux</div>
+            <dl class="about-table">
+                <dt>Version</dt><dd id="about-version">—</dd>
+                <dt>Author</dt><dd>Todor Karachorbadzhiev</dd>
+                <dt>Contact</dt><dd><a href="mailto:app@techbg.net">app@techbg.net</a></dd>
+                <dt>Source</dt><dd><a href="https://github.com/toshko37/SpaceMonger" target="_blank" rel="noopener">github.com/toshko37/SpaceMonger</a></dd>
+                <dt>License</dt><dd>MIT · 2026</dd>
+            </dl>
+            <div class="shortcuts muted">
+                <span><kbd>Enter</kbd> zoom in</span>
+                <span><kbd>Backspace</kbd> up</span>
+                <span><kbd>Home</kbd> root</span>
+                <span><kbd>R</kbd> reload</span>
+                <span><kbd>Esc</kbd> deselect</span>
+            </div>
+            <div class="card-actions">
+                <button class="btn btn-primary" data-close="about-modal">OK</button>
+            </div>
         </div>
     </div>
 </div>
+
+<div id="toasts" class="toasts" aria-live="polite"></div>
 
 <script src="d3.v7.min.js"></script>
 <script src="app.js"></script>

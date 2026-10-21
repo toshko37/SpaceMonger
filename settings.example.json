@@ -2,7 +2,7 @@
   "port": 4322,
   "bind": "0.0.0.0",
   "auth": {
-    "enabled": false,
+    "enabled": true,
     "password": "changeme"
   }
 }

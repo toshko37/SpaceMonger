@@ -1,29 +1,35 @@
-# SpaceMonger Linux — Retro
+# SpaceMonger
 
-Web-based disk space analyzer for Linux with a retro Windows 98 aesthetic.
-Displays your filesystem as an interactive squarified treemap with depth-based
-color coding — inspired by SpaceMonger for Windows.
+Web-based disk space analyzer for Linux. Scans a filesystem and shows it as an
+interactive squarified treemap, so you can see at a glance where the space went.
+Single static binary, no dependencies, dark and light themes.
+
+Inspired by the classic SpaceMonger for Windows.
 
 ## Features
 
-- 🗺️ Squarified treemap — depth-based colors matching original SpaceMonger palette
-- 🖱️ Single-click to select a folder, double-click to zoom in
-- 🔍 Navigate back with **Zoom Out** button or breadcrumb path
-- 📊 **Free Space** button shows free vs. used space proportionally
-- ⚡ Real-time scan progress with file/folder counter
-- 🔒 Optional password protection via `settings.json`
-- 🌐 Accessible from local network (binds to 0.0.0.0)
-- 📦 Single binary, no dependencies, ~10 MB
+- Squarified treemap with depth-based colours; single-click selects, double-click zooms in
+- Breadcrumb navigation, **Full / In / Up** buttons and keyboard shortcuts
+- **Free space** mode shows used vs. free space proportionally
+- Real on-disk usage (`st_blocks`): sparse files, transparent compression (btrfs, ZFS)
+  and hard links are accounted for, with an apparent-vs-actual summary bar
+- Stays on one filesystem: skips other mount points, `/proc`, `/sys`, symlinks, `.zfs`
+- Live scan progress over Server-Sent Events, cancellable at any time
+- Last scan result is kept in memory, so reloading the page is instant
+- Password protection **on by default**, rate-limited login, 24h sessions, logout
+- Dark / light theme (follows the system, toggle in the toolbar)
+- Single ~10 MB binary with the UI embedded; runs as a systemd service
 
-## Quick Install
+## Quick install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/toshko37/SpaceMonger/main/install.sh | sudo bash
 ```
 
-Opens at **http://localhost:4322** (also accessible from the local network).
+The installer prints the generated login password. The UI is at
+**http://localhost:4322** and reachable from the local network.
 
-## Uninstall
+Uninstall:
 
 ```bash
 sudo bash /opt/spacemonger/uninstall.sh
@@ -31,60 +37,105 @@ sudo bash /opt/spacemonger/uninstall.sh
 
 ## Configuration
 
-Edit `/opt/spacemonger/settings.json`:
+`/opt/spacemonger/settings.json`:
 
 ```json
 {
   "port": 4322,
   "bind": "0.0.0.0",
   "auth": {
-    "enabled": false,
-    "password": "abc123"
+    "enabled": true,
+    "password": "changeme"
   }
 }
 ```
 
-Restart after changes: `sudo systemctl restart spacemonger`
+| Key             | Meaning                                                             |
+|-----------------|---------------------------------------------------------------------|
+| `port`          | TCP port to listen on                                               |
+| `bind`          | `0.0.0.0` for the whole LAN, `127.0.0.1` for this machine only      |
+| `auth.enabled`  | Require the password. Leave on unless the host is otherwise isolated |
+| `auth.password` | Login password. If empty while auth is enabled, one is generated and logged |
+
+Restart after changes: `sudo systemctl restart spacemonger`.
+
+The binary also accepts `-settings /path/to/settings.json`.
+
+## Security notes
+
+SpaceMonger runs as root (it has to, to read every directory) and exposes the
+names and sizes of all files on the scanned filesystem. Keep auth enabled when
+`bind` is `0.0.0.0`. Login attempts are limited to 5 per minute per IP. Traffic
+is plain HTTP: put a reverse proxy with TLS in front if you expose it beyond a
+trusted LAN.
 
 ## Usage
 
-| Button          | Action                                      |
-|----------------|---------------------------------------------|
-| **Open**       | Choose a drive/partition to analyze         |
-| **Reload**     | Rescan the current path                     |
-| **Full**       | Zoom back to the scan root                  |
-| **In**         | Zoom into selected folder                   |
-| **Out**        | Go up one directory level                   |
-| **Free Space** | Show free disk space proportionally         |
-| **About**      | Version and author information              |
+| Control         | Action                                            |
+|-----------------|---------------------------------------------------|
+| **Open**        | Choose a mounted filesystem to scan (`O`)         |
+| **Reload**      | Rescan the current path (`R`)                     |
+| **Full**        | Back to the scan root (`Home`)                    |
+| **In**          | Zoom into the selected folder (`Enter`)           |
+| **Up**          | One level up (`Backspace` / `←`)                  |
+| **Free space**  | Show free space next to the treemap               |
+| Single click    | Select a cell (details in the status bar)         |
+| Double click    | Zoom into a folder                                |
+| `Esc`           | Deselect / close dialog                           |
 
-Click any folder rectangle to zoom in. Single-click selects (highlights border),
-double-click zooms in. Use the breadcrumb path to navigate.
-Press **Backspace** or **←** to go up.
+## API
 
-## Build from Source
+All endpoints except `/api/version` and `/api/auth` require a session cookie
+when auth is enabled.
+
+| Method | Path                 | Description                                          |
+|--------|----------------------|------------------------------------------------------|
+| GET    | `/api/auth`          | `{authRequired, authenticated}`                      |
+| POST   | `/api/auth`          | `{"password": "..."}` → sets session cookie          |
+| POST   | `/api/logout`        | Invalidate the session                               |
+| GET    | `/api/mounts`        | Real filesystems from `/proc/mounts` with usage      |
+| GET    | `/api/scan?path=/`   | SSE stream: progress events, then the full tree      |
+| GET    | `/api/data`          | Last completed scan                                  |
+| GET    | `/api/version`       | Build version                                        |
+
+A new scan request cancels any scan still running.
+
+## Build from source
 
 ```bash
 git clone https://github.com/toshko37/SpaceMonger.git
-cd spacemonger
+cd SpaceMonger
 go build -o spacemonger .
-./spacemonger          # runs on port 4322
+./spacemonger            # creates settings.json and prints the password
 ```
 
-Requires Go 1.21+.
+Requires Go 1.22+. Run the tests with `go test -race ./...`.
 
-## Releasing a New Version
+Project layout:
+
+```
+main.go       server setup and routing
+settings.go   settings.json loading / defaults
+scanner.go    filesystem walker (cancellable, hard-link and mount aware)
+mounts.go     /proc/mounts parsing
+auth.go       sessions, login rate limiting
+handlers.go   HTTP / SSE handlers
+static/       embedded UI (vanilla JS + D3 v7)
+```
+
+## Releasing
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+git tag v1.1.0
+git push origin v1.1.0
 ```
 
-GitHub Actions will build binaries for amd64/arm64/arm and attach them to the release.
+GitHub Actions runs the tests, builds amd64 / arm64 / armv7 binaries and
+attaches them to the release.
 
 ## Author
 
-Created by Todor Karachorbadzhiev — [app@techbg.net](mailto:app@techbg.net)
+Todor Karachorbadzhiev — [app@techbg.net](mailto:app@techbg.net)
 
 ## License
 
